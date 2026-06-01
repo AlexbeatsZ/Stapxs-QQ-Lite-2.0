@@ -31,6 +31,21 @@ let forceCloseReason: string | undefined = undefined
 
 export let websocket: WebSocket | undefined = undefined
 
+export function appendAccessToken(url: string, token?: string) {
+    if (!token) return url
+    const sep = url.includes('?') ? '&' : '?'
+    return `${url}${sep}access_token=${encodeURIComponent(token)}`
+}
+
+export function decodeStoredToken(token: string | undefined) {
+    if (!token) return ''
+    try {
+        return decodeURIComponent(token)
+    } catch (e) {
+        return token
+    }
+}
+
 class TimeoutError extends Error {
     echo: string
     constructor(echo: string) {
@@ -73,7 +88,7 @@ export class Connector {
         if (!backend.isWeb()) {
             logger.add(LogType.WS, '使用后端连接模式')
             backend.call('Onebot', 'onebot:connect', false,
-                backend.isDesktop() ?  { address: address, token: token, } : { url: `${address}?access_token=${token}` })
+                backend.isDesktop() ?  { address: address, token: token, } : { url: appendAccessToken(address, token) })
             return
         }
 
@@ -87,7 +102,7 @@ export class Connector {
                 return
             }
             logger.add(LogType.WS, '使用 SSE 连接模式')
-            const sse = new EventSource(`${import.meta.env.VITE_APP_SSE_EVENT_ADDRESS}?access_token=${token}`)
+            const sse = new EventSource(appendAccessToken(import.meta.env.VITE_APP_SSE_EVENT_ADDRESS, token))
             sse.onopen = () => {
                 login.creating = false
                 this.onopen(address, token)
@@ -114,18 +129,18 @@ export class Connector {
                 return
             }
 
-            let url = `ws://${address}?access_token=${token}`
+            let url = appendAccessToken(`ws://${address}`, token)
             if (address.startsWith('ws://') || address.startsWith('wss://')) {
-                url = `${address}?access_token=${token}`
+                url = appendAccessToken(address, token)
             } else if (wss == undefined) {
                 // 判断连接类型
                 if (document.location.protocol == 'https:') {
                     // 判断连接 URL 的协议，https 优先尝试 wss
                     settingsStore.connectSsl = true
-                    url = `wss://${address}?access_token=${token}`
+                    url = appendAccessToken(`wss://${address}`, token)
                 }
             } else {
-                url = `wss://${address}?access_token=${token}`
+                url = appendAccessToken(`wss://${address}`, token)
             }
 
             if (!websocket) {
@@ -479,7 +494,10 @@ export function loadConnectionHistory(): ConnectionHistoryItem[] {
         try {
             const history = JSON.parse(historyStr)
             if (Array.isArray(history)) {
-                return history
+                return history.map((item) => ({
+                    ...item,
+                    token: decodeStoredToken(item.token)
+                }))
             }
         } catch (e) {
             logger.error(e as Error, '加载连接历史失败')
@@ -487,7 +505,10 @@ export function loadConnectionHistory(): ConnectionHistoryItem[] {
     }
     // 如果是数组直接返回（Option.get 已经解析过）
     if (Array.isArray(historyStr)) {
-        return historyStr
+        return historyStr.map((item) => ({
+            ...item,
+            token: decodeStoredToken(item.token)
+        }))
     }
     // 返回空数组作为默认值
     return []
@@ -545,7 +566,7 @@ export function saveConnectionToHistory(address: string, token: string, uin?: st
  */
 export function loadConnectionFromHistory(item: ConnectionHistoryItem) {
     login.address = item.address
-    login.token = item.token
+    login.token = decodeStoredToken(item.token)
 }
 
 /**

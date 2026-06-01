@@ -300,7 +300,7 @@ import anime from 'animejs'
 import packageInfo from '../../../package.json'
 
 import { watch, onMounted, onUnmounted, shallowReactive, shallowRef, provide } from 'vue'
-import { Connector, login as loginInfo, loadConnectionHistory, loadConnectionFromHistory, deleteConnectionHistory } from '@renderer/function/connect'
+import { Connector, login as loginInfo, loadConnectionHistory, loadConnectionFromHistory, deleteConnectionHistory, decodeStoredToken } from '@renderer/function/connect'
 import { Logger, popList, PopInfo, LogType } from '@renderer/function/base'
 import { setLoginWaveTimer } from '@renderer/function/msg'
 import { BaseChatInfoElem } from '@renderer/function/elements/information'
@@ -481,8 +481,7 @@ function connect() {
         // PS：快速连接的地址只会是局域网，所以默认 ws 协议
         loginInfo.address = 'ws://' + tags.quickLoginSelect
     }
-    // https://github.com/Stapxs/Stapxs-QQ-Lite-2.0/issues/312
-    Connector.create(loginInfo.address, encodeURIComponent(loginInfo.token))
+    Connector.create(loginInfo.address, loginInfo.token)
 }
 function selectQuickLogin(address: string) {
     tags.quickLoginSelect = address
@@ -906,7 +905,7 @@ onMounted(() => {
             settingsStore.sysConfig.save_password !== undefined &&
             settingsStore.sysConfig.save_password !== true
         ) {
-            loginInfo.token = settingsStore.sysConfig.save_password
+            loginInfo.token = decodeStoredToken(settingsStore.sysConfig.save_password)
             tags.savePassword = true
         }
         if (settingsStore.sysConfig.auto_connect == true) {
