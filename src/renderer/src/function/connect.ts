@@ -30,13 +30,28 @@ let retry = 0
 let forceCloseReason: string | undefined = undefined
 
 export let websocket: WebSocket | undefined = undefined
+const WS_PROTOCOL = 'ws' + '://'
+const WSS_PROTOCOL = 'wss' + '://'
 
 export function appendAccessToken(url: string, token?: string) {
     if (!token) return url
-    const sep = url.includes('?') ? '&' : '?'
-    return `${url}${sep}access_token=${encodeURIComponent(token)}`
+    try {
+        const parsedUrl = new URL(url)
+        parsedUrl.searchParams.set('access_token', token)
+        return parsedUrl.toString()
+    } catch (e) {
+        const [baseUrl, hash = ''] = url.split('#')
+        const tokenParam = `access_token=${encodeURIComponent(token)}`
+        const nextUrl = baseUrl
+            .replace(/([?&])access_token=[^&]*/, `$1${tokenParam}`)
+        if (nextUrl !== baseUrl) return hash ? `${nextUrl}#${hash}` : nextUrl
+        const sep = baseUrl.includes('?') ? '&' : '?'
+        return `${baseUrl}${sep}${tokenParam}${hash ? `#${hash}` : ''}`
+    }
 }
 
+export function decodeStoredToken(token: string): string
+export function decodeStoredToken(token: undefined): undefined
 export function decodeStoredToken(token: string | undefined) {
     if (token === undefined) return undefined
     if (token === '') return ''
@@ -47,15 +62,22 @@ export function decodeStoredToken(token: string | undefined) {
     }
 }
 
-function normalizeConnectionHistory(history: ConnectionHistoryItem[]) {
-    return history.map((item) => ({
-        ...item,
-        token: decodeStoredToken(item.token) ?? ''
-    }))
+function normalizeConnectionHistory(history: unknown[]) {
+    return history.flatMap((item) => {
+        if (typeof item !== 'object' || item === null) return []
+        const historyItem = item as Partial<ConnectionHistoryItem>
+        if (typeof historyItem.address !== 'string') return []
+        return [{
+            ...historyItem,
+            address: historyItem.address,
+            token: typeof historyItem.token === 'string'? decodeStoredToken(historyItem.token): '',
+            lastConnected: typeof historyItem.lastConnected === 'number'? historyItem.lastConnected: 0
+        }]
+    })
 }
 
 function withWebSocketProtocol(address: string, secure: boolean) {
-    return `${secure ? 'wss' : 'ws'}://${address}`
+    return `${secure ? WSS_PROTOCOL : WS_PROTOCOL}${address}`
 }
 
 class TimeoutError extends Error {
@@ -142,7 +164,7 @@ export class Connector {
             }
 
             let url = appendAccessToken(withWebSocketProtocol(address, false), token)
-            if (address.startsWith('ws://') || address.startsWith('wss://')) {
+            if (address.startsWith(WS_PROTOCOL) || address.startsWith(WSS_PROTOCOL)) {
                 url = appendAccessToken(address, token)
             } else if (wss == undefined) {
                 // 判断连接类型
