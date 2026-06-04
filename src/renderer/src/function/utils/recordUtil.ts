@@ -51,12 +51,16 @@ function getAudioDuration(url: string): Promise<number> {
         const done = (val: number) => {
             if (!resolved) {
                 resolved = true
-                audio.remove()
+                audio.removeEventListener('loadedmetadata', onMeta)
+                audio.removeEventListener('error', onErr)
+                audio.src = ''
                 resolve(val)
             }
         }
-        audio.addEventListener('loadedmetadata', () => done(audio.duration || 0))
-        audio.addEventListener('error', () => done(0))
+        const onMeta = () => done(audio.duration || 0)
+        const onErr = () => done(0)
+        audio.addEventListener('loadedmetadata', onMeta)
+        audio.addEventListener('error', onErr)
         setTimeout(() => done(0), 3000)
         audio.src = url
     })
@@ -78,7 +82,7 @@ function getAudioDuration(url: string): Promise<number> {
  * @throws       无法加载时抛出错误
  */
 export async function loadRecord(data: RecordMsgData, msgId?: string): Promise<RecordLoadResult> {
-    const cacheKey = msgId || data.file || ''
+    const cacheKey = msgId || data.file!
 
     // 缓存检查
     const cached = loadCache.get(cacheKey)

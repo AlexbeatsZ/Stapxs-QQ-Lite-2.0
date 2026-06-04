@@ -237,6 +237,8 @@ onBeforeUnmount(() => {
         audio.pause()
         audio.src = ''
     }
+    // 释放缓存的 blob URL
+    revokeRecord(props.messageId)
 })
 </script>
 
