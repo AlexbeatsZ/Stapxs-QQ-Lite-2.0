@@ -482,10 +482,16 @@ const noticeFunctions = {
         const chatStore = useChatStore()
         const sender = msg.user_id
         if (chatStore.chatInfo.show.id == sender) {
-            chatStore.chatInfo.show.appendInfo = $t('对方正在输入……')
-            setTimeout(() => {
+            // 使用客户端返回的具体状态文本
+            if (msg.status_text) {
+                chatStore.chatInfo.show.appendInfo = $t(msg.status_text)
+                setTimeout(() => {
+                    chatStore.chatInfo.show.appendInfo = undefined
+                }, 10000)
+            } else {
+                // 对方停止输入时，会有一个空的 input_status 消息
                 chatStore.chatInfo.show.appendInfo = undefined
-            }, 10000)
+            }
         }
     },
 } as { [key: string]: (name: string, msg: { [key: string]: any }) => void }
