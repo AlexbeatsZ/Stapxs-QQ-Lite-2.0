@@ -172,6 +172,17 @@
                     type="text" @keyup="sendTestParse">
             </div>
             <div class="opt-item">
+                <font-awesome-icon :icon="['fas', 'wand-magic-sparkles']" />
+                <div>
+                    <span>{{ $t('消息渲染器') }}</span>
+                    <span>{{ $t('快速检查消息渲染组件') }}</span>
+                </div>
+                <button style="width: 100px; font-size: 0.8rem"
+                    class="ss-button" @click="openRawRenderPreview">
+                    {{ $t('打开') }}
+                </button>
+            </div>
+            <div class="opt-item">
                 <font-awesome-icon :icon="['fas', 'envelope']" />
                 <div>
                     <span>{{ $t('应用消息测试') }}</span>
@@ -273,7 +284,7 @@
     import { i18n } from '@renderer/main'
     import packageInfo from '../../../../../package.json'
 
-    import { ref, onMounted, watch, useTemplateRef } from 'vue'
+    import { ref, onMounted, watch, useTemplateRef, markRaw } from 'vue'
     import {
         runASWEvent as save,
         saveAll,
@@ -291,6 +302,7 @@
     import { uptime } from '@renderer/main'
     import { loadJsonMap } from '@renderer/function/utils/appUtil'
     import { backend } from '@renderer/runtime/backend'
+    import RawMsgRenderPreviewPan from '@renderer/components/RawMsgRenderPreviewPan.vue'
     import { useSettingsStore } from '@renderer/state/settings'
     import { useAuthStore } from '@renderer/state/auth'
     import { useUIStore } from '@renderer/state/ui'
@@ -312,7 +324,6 @@
     const appmsg_text = ref('')
     const customCssLoaded = ref(false)
     const customCssSize = ref('')
-
     const cssFileInput = useTemplateRef<HTMLInputElement>('cssFileInput')
 
     watch(
@@ -339,8 +350,10 @@
     function sendTestParse(event: KeyboardEvent) {
         // 发送测试解析消息
         if (event.keyCode === 13 && parse_text.value !== '') {
-            const info = JSON.parse(parse_text.value)
-            dispatch(info)
+            const text = JSON.parse(parse_text.value)
+            setTimeout(() => {
+                dispatch(text)
+            }, 5000)
             parse_text.value = ''
         }
     }
@@ -350,6 +363,17 @@
             new PopInfo().add(PopType.INFO, appmsg_text.value, false)
             appmsg_text.value = ''
         }
+    }
+
+    function openRawRenderPreview() {
+        uiStore.popBoxList.push({
+            title: $t('消息渲染器'),
+            template: markRaw(RawMsgRenderPreviewPan),
+            data: {
+                text: parse_text.value,
+            },
+            full: true,
+        })
     }
 
     function sendAbab() {

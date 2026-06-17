@@ -146,6 +146,9 @@ export function parseMsgList(
 ): any[] {
     const uiStore = useUIStore()
     const authStore = useAuthStore()
+    if (!Array.isArray(list) || list.length === 0 || !list[0]) {
+        return []
+    }
     // 判断消息类型
     if (typeof list[0].message == 'string') {
         uiStore.msgType = BotMsgType.CQCode
@@ -167,6 +170,9 @@ export function parseMsgList(
                 let msgList = list[i].message
                 if (msgList == undefined) {
                     msgList = list[i].content
+                }
+                if (!Array.isArray(msgList)) {
+                    continue
                 }
                 for (let j = 0; j < msgList.length; j++) {
                     const data = getMsgData(
@@ -194,6 +200,9 @@ export function parseMsgList(
                     let content = list[i].message
                     if (content == undefined) {
                         content = list[i].content
+                    }
+                    if (!Array.isArray(content)) {
+                        return
                     }
                     content.forEach((item: any) => {
                         if (item.type == type) {

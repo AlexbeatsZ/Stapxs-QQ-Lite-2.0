@@ -1646,6 +1646,57 @@ async function normalizeMessagesFromPayload(payload: any): Promise<any[] | undef
     return getMessageList(rawList)
 }
 
+export async function normalizeMessagesForPreview(payload: any): Promise<any[]> {
+    const authStore = useAuthStore()
+    const map = authStore.jsonMap
+
+    if (
+        payload &&
+        payload.post_type === 'message' &&
+        Array.isArray(payload.message)
+    ) {
+        const directList = parseMsgList(
+            [payload],
+            map?.message_list?.type ?? '$',
+            map?.message_value,
+        )
+
+        if (directList.length === 0) return []
+        return Promise.all(directList.map(msgPreprocess))
+    }
+
+    if (!map?.message_list) return []
+
+    let rawList = getMsgData('message_list', payload, map.message_list)
+    if (rawList == undefined) {
+        rawList = getMsgData(
+            'message_list',
+            buildMsgList([payload]),
+            map.message_list,
+        )
+    }
+    if (rawList == undefined) return []
+
+    const list = parseMsgList(
+        rawList,
+        map.message_list.type,
+        map.message_value,
+    )
+    if (list.length === 0) return []
+
+    if (map.message_list.order === 'reverse') {
+        list.reverse()
+    }
+
+    list.forEach((item: any) => {
+        if (!item.post_type) {
+            item.post_type = 'message'
+        }
+    })
+
+    return Promise.all(list.map(msgPreprocess))
+}
+
 function normalizeNewIncomingMessage(data: any): any[] {
     let list = getMsgData(
         'message_list',
