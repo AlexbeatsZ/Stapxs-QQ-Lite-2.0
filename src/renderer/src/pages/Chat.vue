@@ -67,7 +67,7 @@
             <span>{{ $t('加载中') }}</span>
         </div>
         <!-- 消息显示区 -->
-        <div id="msgPan" class="chat"
+        <div id="msgPan" ref="msgPan" class="chat"
             style="scroll-behavior: smooth"
             @scroll="chatScroll($event, details[3].open)">
             <template v-if="!details[3].open">
@@ -141,7 +141,7 @@
                     </template>
                 </TransitionGroup>
             </template>
-            <span class="chat-padding">&nbsp;</span>
+            <span ref="chatPadding" class="chat-padding">&nbsp;</span>
         </div>
         <!-- 滚动到底部悬浮标志 -->
         <div class="new-msg"
@@ -153,7 +153,7 @@
             </div>
         </div>
         <!-- 底部区域 -->
-        <div id="send-more" class="more">
+        <div id="send-more" ref="sendMore" class="more">
             <!-- 功能附加 -->
             <div>
                 <div>
@@ -373,6 +373,7 @@
                             <label for="main-input" class="sr-only">{{ $t('消息输入框') }}</label>
                             <input
                                 id="main-input"
+                                ref="mainInput"
                                 v-model="msg"
                                 type="text"
                                 autocomplete="off"
@@ -395,6 +396,7 @@
                         <template v-else>
                             <label for="main-input-ex" class="sr-only">{{ $t('消息输入框') }}</label>
                             <textarea id="main-input-ex"
+                                ref="mainInput"
                                 v-model="msg"
                                 type="text"
                                 :disabled="uiStore.openSideBar"
@@ -643,6 +645,10 @@ const authStore = useAuthStore()
 const chatStore = useChatStore()
 const contactStore = useContactStore()
 const mergePan = useTemplateRef<InstanceType<typeof MergePan>>('mergePan')
+const msgPan = useTemplateRef<HTMLDivElement>('msgPan')
+const chatPadding = useTemplateRef<HTMLSpanElement>('chatPadding')
+const sendMore = useTemplateRef<HTMLDivElement>('sendMore')
+const mainInput = useTemplateRef<HTMLInputElement | HTMLTextAreaElement>('mainInput')
 
 const multipleSelectList = ref<string[]>([])
 const tags = ref({
@@ -813,7 +819,7 @@ watch(() => chat, () => {
     multipleSelectList.value = []
     initMenuDisplay()
     nextTick(() => {
-        resizeMainInput()
+        scheduleResizeMainInput()
     })
     const history = useSessionHistoryStore()
     const sessionId = chat.show.id
@@ -852,7 +858,7 @@ onMounted(() => {
     })
     nextTick(() => {
         setupChatPaddingObserver()
-        resizeMainInput()
+        scheduleResizeMainInput()
     })
 })
 
@@ -874,62 +880,66 @@ onBeforeUnmount(() => {
 let resizeMainInputFrame: number | null = null
 let chatPaddingFrame: number | null = null
 let sendMoreResizeObserver: ResizeObserver | null = null
+let chatPaddingAfterUpdate: Array<() => void> = []
 // scrollHeight includes a small browser-dependent inner gap for this textarea style.
 // Keep the existing compact visual height, but make the adjustment explicit.
 const TEXTAREA_SCROLL_HEIGHT_COMPACT_OFFSET = 4
 
 function scheduleResizeMainInput(target?: HTMLTextAreaElement | HTMLInputElement | null, keepBottom = false) {
-    if (!Option.get('use_breakline')) return
+    // The template switches between input and textarea, so measure only after Vue
+    // has applied the branch and coalesce rapid input changes into one frame.
     nextTick(() => {
         if (resizeMainInputFrame !== null) {
             cancelAnimationFrame(resizeMainInputFrame)
         }
         resizeMainInputFrame = requestAnimationFrame(() => {
             resizeMainInputFrame = null
-            resizeMainInput(target)
-            if (keepBottom) {
-                requestAnimationFrame(() => {
-                    scrollBottom()
-                })
-            }
+            resizeMainInput(target ?? mainInput.value)
+            scheduleChatPaddingUpdate(keepBottom ? () => scrollBottom() : undefined)
         })
     })
 }
 
 function updateChatPadding() {
-    const morePan = document.getElementById('send-more')
-    const padding = document.querySelector('.chat-padding') as HTMLSpanElement
-    const chatPan = padding?.parentElement as HTMLDivElement | null
-    if (morePan && padding) {
-        const contentBlocks = Array.from(morePan.children)
-            .flatMap(child => Array.from(child.children))
-            .filter((child): child is HTMLElement =>
-                child instanceof HTMLElement && child.offsetHeight > 0,
-            )
-        const contentTop = contentBlocks.length > 0
-            ? contentBlocks.reduce(
-                (top, child) => Math.min(top, child.getBoundingClientRect().top),
-                Number.POSITIVE_INFINITY,
-            )
-            : morePan.getBoundingClientRect().top
-        const chatBottom = chatPan?.getBoundingClientRect().bottom ?? 0
-        padding.style.height = Math.max(0, chatBottom - contentTop) + 'px'
-    }
+    const morePan = sendMore.value
+    const padding = chatPadding.value
+    const chatPan = msgPan.value
+    if (!morePan || !padding || !chatPan) return
+
+    const contentBlocks = Array.from(morePan.children)
+        .flatMap(child => Array.from(child.children))
+        .filter((child): child is HTMLElement =>
+            child instanceof HTMLElement && child.offsetHeight > 0,
+        )
+    const contentTop = contentBlocks.length > 0
+        ? contentBlocks.reduce(
+            (top, child) => Math.min(top, child.getBoundingClientRect().top),
+            Number.POSITIVE_INFINITY,
+        )
+        : morePan.getBoundingClientRect().top
+    const chatBottom = chatPan.getBoundingClientRect().bottom
+    padding.style.height = Math.max(0, chatBottom - contentTop) + 'px'
 }
 
-function scheduleChatPaddingUpdate() {
+function scheduleChatPaddingUpdate(afterUpdate?: () => void) {
+    if (afterUpdate) {
+        chatPaddingAfterUpdate.push(afterUpdate)
+    }
     if (chatPaddingFrame !== null) {
-        cancelAnimationFrame(chatPaddingFrame)
+        return
     }
     chatPaddingFrame = requestAnimationFrame(() => {
         chatPaddingFrame = null
         updateChatPadding()
+        const callbacks = chatPaddingAfterUpdate
+        chatPaddingAfterUpdate = []
+        callbacks.forEach(callback => callback())
     })
 }
 
 function setupChatPaddingObserver() {
     if (sendMoreResizeObserver !== null) return
-    const morePan = document.getElementById('send-more')
+    const morePan = sendMore.value
     if (!morePan || typeof ResizeObserver === 'undefined') {
         scheduleChatPaddingUpdate()
         return
@@ -938,12 +948,11 @@ function setupChatPaddingObserver() {
         scheduleChatPaddingUpdate()
     })
     sendMoreResizeObserver.observe(morePan)
-    updateChatPadding()
+    scheduleChatPaddingUpdate()
 }
 
 function resizeMainInput(target?: HTMLTextAreaElement | HTMLInputElement | null) {
-    let input = target ?? (document.getElementById('main-input') as HTMLTextAreaElement | HTMLInputElement | null)
-    input = input ?? (document.getElementById('main-input-ex') as HTMLTextAreaElement | HTMLInputElement | null)
+    const input = target ?? mainInput.value
     if (!input) return
     if (!Option.get('use_breakline')) {
         input.style.height = ''
@@ -951,7 +960,6 @@ function resizeMainInput(target?: HTMLTextAreaElement | HTMLInputElement | null)
     }
     if (!(input instanceof HTMLTextAreaElement)) {
         input.style.height = ''
-        scheduleChatPaddingUpdate()
         return
     }
     const computed = getComputedStyle(input)
@@ -992,8 +1000,6 @@ function resizeMainInput(target?: HTMLTextAreaElement | HTMLInputElement | null)
 
     input.getBoundingClientRect()
     input.style.transition = oldTransition
-
-    scheduleChatPaddingUpdate()
 }
 function jumpSearchMsg() {
     closeSearch()
