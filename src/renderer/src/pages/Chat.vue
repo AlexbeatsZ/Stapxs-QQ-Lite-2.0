@@ -568,6 +568,7 @@ import {
     ref,
     watch,
     onMounted,
+    onBeforeUnmount,
     markRaw,
     nextTick,
     reactive,
@@ -820,13 +821,9 @@ watch(() => chat, () => {
     if (session) history.add(session)
 })
 
-watch(() => msg.value, (newMsg, oldMsgVal) => {
+watch(() => msg.value, (_newMsg, oldMsgVal) => {
     oldMsg.value = oldMsgVal
-    if (!newMsg) {
-        nextTick(() => {
-            resizeMainInput()
-        })
-    }
+    scheduleResizeMainInput()
 })
 
 onMounted(() => {
@@ -854,9 +851,95 @@ onMounted(() => {
         exitWin()
     })
     nextTick(() => {
+        setupChatPaddingObserver()
         resizeMainInput()
     })
 })
+
+onBeforeUnmount(() => {
+    if (resizeMainInputFrame !== null) {
+        cancelAnimationFrame(resizeMainInputFrame)
+        resizeMainInputFrame = null
+    }
+    if (chatPaddingFrame !== null) {
+        cancelAnimationFrame(chatPaddingFrame)
+        chatPaddingFrame = null
+    }
+    if (sendMoreResizeObserver !== null) {
+        sendMoreResizeObserver.disconnect()
+        sendMoreResizeObserver = null
+    }
+})
+
+let resizeMainInputFrame: number | null = null
+let chatPaddingFrame: number | null = null
+let sendMoreResizeObserver: ResizeObserver | null = null
+// scrollHeight includes a small browser-dependent inner gap for this textarea style.
+// Keep the existing compact visual height, but make the adjustment explicit.
+const TEXTAREA_SCROLL_HEIGHT_COMPACT_OFFSET = 4
+
+function scheduleResizeMainInput(target?: HTMLTextAreaElement | HTMLInputElement | null, keepBottom = false) {
+    if (!Option.get('use_breakline')) return
+    nextTick(() => {
+        if (resizeMainInputFrame !== null) {
+            cancelAnimationFrame(resizeMainInputFrame)
+        }
+        resizeMainInputFrame = requestAnimationFrame(() => {
+            resizeMainInputFrame = null
+            resizeMainInput(target)
+            if (keepBottom) {
+                requestAnimationFrame(() => {
+                    scrollBottom()
+                })
+            }
+        })
+    })
+}
+
+function updateChatPadding() {
+    const morePan = document.getElementById('send-more')
+    const padding = document.querySelector('.chat-padding') as HTMLSpanElement
+    const chatPan = padding?.parentElement as HTMLDivElement | null
+    if (morePan && padding) {
+        const contentBlocks = Array.from(morePan.children)
+            .flatMap(child => Array.from(child.children))
+            .filter((child): child is HTMLElement =>
+                child instanceof HTMLElement && child.offsetHeight > 0,
+            )
+        const contentTop = contentBlocks.length > 0
+            ? contentBlocks.reduce(
+                (top, child) => Math.min(top, child.getBoundingClientRect().top),
+                Number.POSITIVE_INFINITY,
+            )
+            : morePan.getBoundingClientRect().top
+        const chatBottom = chatPan?.getBoundingClientRect().bottom ?? 0
+        padding.style.height = Math.max(0, chatBottom - contentTop) + 'px'
+    }
+}
+
+function scheduleChatPaddingUpdate() {
+    if (chatPaddingFrame !== null) {
+        cancelAnimationFrame(chatPaddingFrame)
+    }
+    chatPaddingFrame = requestAnimationFrame(() => {
+        chatPaddingFrame = null
+        updateChatPadding()
+    })
+}
+
+function setupChatPaddingObserver() {
+    if (sendMoreResizeObserver !== null) return
+    const morePan = document.getElementById('send-more')
+    if (!morePan || typeof ResizeObserver === 'undefined') {
+        scheduleChatPaddingUpdate()
+        return
+    }
+    sendMoreResizeObserver = new ResizeObserver(() => {
+        scheduleChatPaddingUpdate()
+    })
+    sendMoreResizeObserver.observe(morePan)
+    updateChatPadding()
+}
 
 function resizeMainInput(target?: HTMLTextAreaElement | HTMLInputElement | null) {
     let input = target ?? (document.getElementById('main-input') as HTMLTextAreaElement | HTMLInputElement | null)
@@ -864,6 +947,11 @@ function resizeMainInput(target?: HTMLTextAreaElement | HTMLInputElement | null)
     if (!input) return
     if (!Option.get('use_breakline')) {
         input.style.height = ''
+        return
+    }
+    if (!(input instanceof HTMLTextAreaElement)) {
+        input.style.height = ''
+        scheduleChatPaddingUpdate()
         return
     }
     const computed = getComputedStyle(input)
@@ -884,10 +972,28 @@ function resizeMainInput(target?: HTMLTextAreaElement | HTMLInputElement | null)
     if (!input.dataset.baseHeight) {
         input.dataset.baseHeight = String(minHeight)
     }
-    input.style.height = '0'
+
+    const oldTransition = input.style.transition
+    input.style.transition = 'none'
+    const oldOverflow = input.style.overflow
+
     const baseHeight = Number.parseFloat(input.dataset.baseHeight) || minHeight
-    const targetHeight = Math.max(input.scrollHeight, baseHeight)
-    input.style.height = targetHeight + 'px'
+    // Fast-path: if content is empty, reset directly to baseHeight without measuring
+    if (input.value === '') {
+        input.style.height = baseHeight + 'px'
+    } else {
+        // Set overflow:hidden so scrollHeight correctly reflects content height
+        input.style.overflow = 'hidden'
+        input.style.height = '0px'
+        const targetHeight = Math.max(input.scrollHeight - TEXTAREA_SCROLL_HEIGHT_COMPACT_OFFSET, baseHeight)
+        input.style.height = targetHeight + 'px'
+        input.style.overflow = oldOverflow
+    }
+
+    input.getBoundingClientRect()
+    input.style.transition = oldTransition
+
+    scheduleChatPaddingUpdate()
 }
 function jumpSearchMsg() {
     closeSearch()
@@ -1103,6 +1209,7 @@ function mainKey(event: KeyboardEvent) {
     }
 
     if (tags.value.sendTag == 'READY' && msg.value !== '') {
+        event.preventDefault()
         sendMsg()
     } else {
         if(event.key === 'Enter' &&
@@ -1181,6 +1288,7 @@ function mainKeyUp(event: KeyboardEvent) {
         tags.value.checkNewLineFlag = false
         if (msg.value == '\n'){
             msg.value = ''
+            scheduleResizeMainInput()
         }
     }
 
@@ -2175,9 +2283,7 @@ function sendMsg(echo = 'sendMsgBack') {
     imgCache.value.clear()
     scrollBottom()
     cancelReply()
-    nextTick(() => {
-        resizeMainInput()
-    })
+    scheduleResizeMainInput(undefined, true)
 }
 
 function updateList(newLength: number, oldLength: number) {
@@ -2394,7 +2500,7 @@ function showJin() {
 
 async function handleInput(event: Event) {
     const input = event.target as HTMLInputElement
-    resizeMainInput(input)
+    scheduleResizeMainInput(input)
 
     const diff = getDifferencesWithRanges(msg.value, oldMsg.value)
     let { end, str } = { end: 0, str: '' }
@@ -2461,9 +2567,7 @@ function closeSearch() {
     details.value[3].open = !details.value[3].open
     msg.value = ''
     tags.value.search.list = reactive(list)
-    nextTick(() => {
-        resizeMainInput()
-    })
+    scheduleResizeMainInput()
 }
 
 function sendPoke(userId: number) {
