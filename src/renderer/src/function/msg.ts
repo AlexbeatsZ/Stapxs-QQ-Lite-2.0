@@ -83,6 +83,12 @@ let listLoadTimes = 0
 const logger = new Logger()
 let firstHeartbeatTime = -1
 let heartbeatTime = -1
+const MILLISECONDS_PER_SECOND = 1000
+const META_EVENT_WATCHDOG = {
+    // Give one missed heartbeat plus a small network/main-thread grace window before forcing a disconnect.
+    timeoutMultiplier: 2,
+    graceSeconds: 5,
+}
 let loginWaveTimer: any = null
 
 export function setLoginWaveTimer(timer: any) {
@@ -179,13 +185,20 @@ function clearMetaEventWatchdog() {
     connectionStore.metaEventTimeoutTriggered = false
 }
 
-function refreshMetaEventWatchdog(interval: number) {
-    if (interval <= 0) return
+function refreshMetaEventWatchdog(intervalSeconds: number) {
+    if (intervalSeconds <= 0) return
 
     const connectionStore = useConnectionStore()
     if (connectionStore.metaEventWatchTimer) {
         clearTimeout(connectionStore.metaEventWatchTimer)
     }
+
+    const timeoutSeconds = Math.ceil(
+        Math.max(
+            intervalSeconds * META_EVENT_WATCHDOG.timeoutMultiplier,
+            intervalSeconds + META_EVENT_WATCHDOG.graceSeconds,
+        ),
+    )
 
     connectionStore.metaEventTimeoutTriggered = false
     connectionStore.metaEventWatchTimer = setTimeout(() => {
@@ -194,7 +207,30 @@ function refreshMetaEventWatchdog(interval: number) {
         connectionStore.metaEventWatchTimer = undefined
         logger.add(LogType.WS, '心跳包超时，准备断开连接')
         Connector.forceDisconnect('心跳包超时')
-    }, interval * 1000)
+    }, timeoutSeconds * MILLISECONDS_PER_SECOND)
+}
+
+function getObservedHeartbeatIntervalSeconds(msg: { [key: string]: any }) {
+    const currentHeartbeatTimeSeconds = Number(msg.time)
+    if (
+        firstHeartbeatTime > 0 &&
+        Number.isFinite(currentHeartbeatTimeSeconds) &&
+        currentHeartbeatTimeSeconds > firstHeartbeatTime
+    ) {
+        return currentHeartbeatTimeSeconds - firstHeartbeatTime
+    }
+
+    return -1
+}
+
+function getHeartbeatIntervalSeconds(msg: { [key: string]: any }) {
+    // OneBot heartbeat `interval` is reported in milliseconds; `time` is a Unix timestamp in seconds.
+    const reportedIntervalMilliseconds = Number(msg.interval)
+    if (Number.isFinite(reportedIntervalMilliseconds) && reportedIntervalMilliseconds > 0) {
+        return reportedIntervalMilliseconds / MILLISECONDS_PER_SECOND
+    }
+
+    return getObservedHeartbeatIntervalSeconds(msg)
 }
 
 export function dispatch(raw: string | { [k: string]: any }, echo?: string) {
@@ -249,7 +285,7 @@ const noticeFunctions = {
         }
         if (firstHeartbeatTime != -1 && heartbeatTime == -1) {
             // 计算心跳时间
-            heartbeatTime = msg.time - firstHeartbeatTime
+            heartbeatTime = getHeartbeatIntervalSeconds(msg)
         }
         // 记录心跳状态
         if (heartbeatTime != -1) {
