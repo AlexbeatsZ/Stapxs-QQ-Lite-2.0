@@ -1200,13 +1200,13 @@ export function loadJsonMap(name: string) {
                         newMsgPath = (msgPathList[newMsgPathKey] as any).default
                     }
                     // 合并映射表
-                    Object.keys(msgPath).forEach((key) => {
-                        if (newMsgPath && key != 'name' && newMsgPath[key]) {
-                            if (msgPath)
-                                newMsgPath[key] = msgPath[key]
+                    if (newMsgPath) {
+                        msgPath = {
+                            ...newMsgPath,
+                            ...msgPath,
+                            name: msgPath.name,
                         }
-                    })
-                    msgPath = newMsgPath
+                    }
                     logger.system('非常抱歉开发者，已帮阁下将映射表重定向加载为 ：' + msgPath?.name + ' （慌张）')
                 }
             } else {
