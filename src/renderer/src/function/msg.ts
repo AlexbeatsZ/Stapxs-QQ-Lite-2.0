@@ -66,6 +66,7 @@ import { useConnectionStore } from '@renderer/state/connection'
 import { useStickerStore } from '@renderer/state/sticker'
 import { useUIStore } from '@renderer/state/ui'
 import { useSettingsStore } from '@renderer/state/settings'
+import { useQzoneStore } from '@renderer/state/qzone'
 
 const popInfo = new PopInfo()
 // eslint-disable-next-line
@@ -601,12 +602,16 @@ const msgFunctions = {
             // 加载列表消息
             reloadUsers()
             reloadCookies()
+            // 尝试加载 QZore 列表
+            if (authStore.jsonMap.get_qzone_feed) {
+                Connector.send(authStore.jsonMap.get_qzone_feed.name, {}, 'getQzoneFeed')
+            }
         }
     },
 
     /**
      * 补充登录信息
-     * @deprecated 功能在后期更新中未被重构检查，可能存在问题
+     * @deprecated 此功能在 OICQ 后的 bot 中没有再实现，暂时保留
      */
     getMoreLoginInfo: (_: string, msg: { [key: string]: any }) => {
         const authStore = useAuthStore()
@@ -893,7 +898,6 @@ const msgFunctions = {
         const newEchoList = ['sendMsgBack', ...echoList.slice(4)]
         msgFunctions['sendMsgBack'](_, msg, newEchoList)
     },
-
     /**
      * 获取收藏表情
      */
@@ -1350,6 +1354,43 @@ const msgFunctions = {
     setMessageRead() {
         // do nothing
     },
+
+    /**
+     * 获取 QQ 空间推送列表
+     * @param _
+     * @param msg
+     */
+    getQzoneFeed: (_: string, msg: { [key: string]: any }) => {
+        const qzoneStore = useQzoneStore()
+        const list = getMsgData('get_qzone_feed', msg, msgPath.get_qzone_feed)
+        if (list) {
+            qzoneStore.state.currentView = 'feed'
+            qzoneStore.qzoneFeedList = list
+        }
+    },
+
+    /**
+     * 获取 QQ 空间“我的”列表
+     * @param _
+     * @param msg
+     */
+    getQzoneMsg: (_: string, msg: { [key: string]: any }) => {
+        const qzoneStore = useQzoneStore()
+        const list = getMsgData('get_qzone_msg', msg, msgPath.get_qzone_msg)
+        if (list) {
+            qzoneStore.state.currentView = 'my'
+            if (qzoneStore.state.myPagePos === 0) {
+                qzoneStore.qzoneFeedList = list
+            } else {
+                qzoneStore.qzoneFeedList = [
+                    ...qzoneStore.qzoneFeedList,
+                    ...list,
+                ]
+            }
+            qzoneStore.state.myHasMore = list.length >= qzoneStore.state.myPageSize
+        }
+        qzoneStore.state.myLoading = false
+    }
 } as {
     [key: string]: (
         name: string,

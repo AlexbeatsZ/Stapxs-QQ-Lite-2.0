@@ -218,6 +218,17 @@
     background: rgba(var(--color-card-rgb), 0.5) !important;
 }
 
+.qzone-view-header a,
+.create-qzone,
+.qzone-feed-load-state {
+    background: rgba(var(--color-card-rgb), 0.8) !important;
+    backdrop-filter: blur(10px);
+}
+.qzone-feed-card {
+    background: rgba(var(--color-card-rgb), 0.6);
+    backdrop-filter: blur(10px);
+}
+
 @media (max-width: 700px) {
     .friend-list {
         background: transparent !important;

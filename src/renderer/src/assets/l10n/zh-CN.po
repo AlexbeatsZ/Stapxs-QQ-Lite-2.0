@@ -1883,5 +1883,26 @@ msgstr ""
 msgid "点击加载图片"
 msgstr ""
 
+msgid "空间"
+msgstr ""
+
+msgid "QZone Feeds"
+msgstr ""
+
+msgid "我的"
+msgstr ""
+
+msgid "刷新"
+msgstr ""
+
+msgid "浏览"
+msgstr ""
+
+msgid "分享新鲜事..."
+msgstr ""
+
 msgid "等 {count} 人赞了"
+msgstr ""
+
+msgid "{count} 人赞了"
 msgstr ""

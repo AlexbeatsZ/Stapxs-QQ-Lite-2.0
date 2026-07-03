@@ -3,6 +3,7 @@
         Stapxs QQ Lite Development Mode
         {{ backend.platform ? ' / platform: ' + backend.platform : '' }}
         {{ ' / client: ' + appClient.type }}
+        {{ ' / backend: ' + (authStore.jsonMap?.name ?? 'Not Connected') }}
         {{ ' / fps: ' + fps.value }}
     </div>
     <div v-if="tags.musicLyric != ''" class="lyric-bar">
@@ -44,6 +45,13 @@
                     @click="changeTab('列表', 'Friends', true)">
                     <font-awesome-icon :icon="['fas', 'user']" />
                     <span>{{ $t('列表') }}</span>
+                </li>
+                <li v-if="useQzoneStore().qzoneFeedList.length > 0"
+                    id="bar-qzone"
+                    :class="tags.page == 'Qzone' ? 'active' : ''"
+                    @click="changeTab('空间', 'Qzone', false)">
+                    <font-awesome-icon :icon="['fas', 'star']" />
+                    <span>{{ $t('空间') }}</span>
                 </li>
                 <div class="side-bar-space" />
                 <li v-if="tags.currentMusic"
@@ -205,6 +213,9 @@
                 <div v-if="tags.page == 'Friends'" id="friendTab">
                     <Friends :list="contactStore.userList" @load-history="loadHistory" @user-click="changeChat" />
                 </div>
+                <div v-if="tags.page == 'Qzone'" id="qzoneTab">
+                    <Qzone />
+                </div>
                 <div class="opt-main-tab" style="opacity: 0">
                     <Options :show="tags.page == 'Options'" :class="tags.page == 'Options' ? 'active' : ''"
                         :config="settingsStore.sysConfig" />
@@ -319,11 +330,13 @@ import { backend } from './runtime/backend'
 import Options from '@renderer/pages/Options.vue'
 import Friends from '@renderer/pages/Friends.vue'
 import Messages from '@renderer/pages/Messages.vue'
+import Qzone from '@renderer/pages/Qzone.vue'
 import MusicPlayer, { getCurrentMusic } from './components/MusicPlayer.vue'
 import FileManager, { panelVisible, closePanel } from './components/FileManager.vue'
 import GlobalSessionSearchBar from './components/GlobalSessionSearchBar.vue'
 import NtViewer from './components/ViewerCom.vue'
 import Tooltips from './components/tooltip/Tooltips.vue'
+import { useQzoneStore } from './state/qzone'
 
 // 注册组件实例
 const ntViewer = shallowRef<InstanceType<typeof NtViewer> | null>(null)
