@@ -67,7 +67,7 @@
             <span>{{ $t('加载中') }}</span>
         </div>
         <!-- 消息显示区 -->
-        <div id="msgPan" class="chat"
+        <div id="msgPan" ref="msgPan" class="chat"
             style="scroll-behavior: smooth"
             @scroll="chatScroll($event, details[3].open)">
             <template v-if="!details[3].open">
@@ -141,7 +141,7 @@
                     </template>
                 </TransitionGroup>
             </template>
-            <span class="chat-padding">&nbsp;</span>
+            <span ref="chatPadding" class="chat-padding">&nbsp;</span>
         </div>
         <!-- 滚动到底部悬浮标志 -->
         <div class="new-msg"
@@ -153,7 +153,7 @@
             </div>
         </div>
         <!-- 底部区域 -->
-        <div id="send-more" class="more">
+        <div id="send-more" ref="sendMore" class="more">
             <!-- 功能附加 -->
             <div>
                 <div>
@@ -373,6 +373,7 @@
                             <label for="main-input" class="sr-only">{{ $t('消息输入框') }}</label>
                             <input
                                 id="main-input"
+                                ref="mainInput"
                                 v-model="msg"
                                 type="text"
                                 autocomplete="off"
@@ -395,6 +396,7 @@
                         <template v-else>
                             <label for="main-input-ex" class="sr-only">{{ $t('消息输入框') }}</label>
                             <textarea id="main-input-ex"
+                                ref="mainInput"
                                 v-model="msg"
                                 type="text"
                                 :disabled="uiStore.openSideBar"
@@ -568,6 +570,7 @@ import {
     ref,
     watch,
     onMounted,
+    onBeforeUnmount,
     markRaw,
     nextTick,
     reactive,
@@ -642,6 +645,10 @@ const authStore = useAuthStore()
 const chatStore = useChatStore()
 const contactStore = useContactStore()
 const mergePan = useTemplateRef<InstanceType<typeof MergePan>>('mergePan')
+const msgPan = useTemplateRef<HTMLDivElement>('msgPan')
+const chatPadding = useTemplateRef<HTMLSpanElement>('chatPadding')
+const sendMore = useTemplateRef<HTMLDivElement>('sendMore')
+const mainInput = useTemplateRef<HTMLInputElement | HTMLTextAreaElement>('mainInput')
 
 const multipleSelectList = ref<string[]>([])
 const tags = ref({
@@ -812,7 +819,7 @@ watch(() => chat, () => {
     multipleSelectList.value = []
     initMenuDisplay()
     nextTick(() => {
-        resizeMainInput()
+        scheduleResizeMainInput()
     })
     const history = useSessionHistoryStore()
     const sessionId = chat.show.id
@@ -820,13 +827,9 @@ watch(() => chat, () => {
     if (session) history.add(session)
 })
 
-watch(() => msg.value, (newMsg, oldMsgVal) => {
+watch(() => msg.value, (_newMsg, oldMsgVal) => {
     oldMsg.value = oldMsgVal
-    if (!newMsg) {
-        nextTick(() => {
-            resizeMainInput()
-        })
-    }
+    scheduleResizeMainInput()
 })
 
 onMounted(() => {
@@ -854,15 +857,108 @@ onMounted(() => {
         exitWin()
     })
     nextTick(() => {
-        resizeMainInput()
+        setupChatPaddingObserver()
+        scheduleResizeMainInput()
     })
 })
 
+onBeforeUnmount(() => {
+    if (resizeMainInputFrame !== null) {
+        cancelAnimationFrame(resizeMainInputFrame)
+        resizeMainInputFrame = null
+    }
+    if (chatPaddingFrame !== null) {
+        cancelAnimationFrame(chatPaddingFrame)
+        chatPaddingFrame = null
+    }
+    if (sendMoreResizeObserver !== null) {
+        sendMoreResizeObserver.disconnect()
+        sendMoreResizeObserver = null
+    }
+})
+
+let resizeMainInputFrame: number | null = null
+let chatPaddingFrame: number | null = null
+let sendMoreResizeObserver: ResizeObserver | null = null
+let chatPaddingAfterUpdate: Array<() => void> = []
+// scrollHeight includes a small browser-dependent inner gap for this textarea style.
+// Keep the existing compact visual height, but make the adjustment explicit.
+const TEXTAREA_SCROLL_HEIGHT_COMPACT_OFFSET = 4
+
+function scheduleResizeMainInput(target?: HTMLTextAreaElement | HTMLInputElement | null, keepBottom = false) {
+    // The template switches between input and textarea, so measure only after Vue
+    // has applied the branch and coalesce rapid input changes into one frame.
+    nextTick(() => {
+        if (resizeMainInputFrame !== null) {
+            cancelAnimationFrame(resizeMainInputFrame)
+        }
+        resizeMainInputFrame = requestAnimationFrame(() => {
+            resizeMainInputFrame = null
+            resizeMainInput(target ?? mainInput.value)
+            scheduleChatPaddingUpdate(keepBottom ? () => scrollBottom() : undefined)
+        })
+    })
+}
+
+function updateChatPadding() {
+    const morePan = sendMore.value
+    const padding = chatPadding.value
+    const chatPan = msgPan.value
+    if (!morePan || !padding || !chatPan) return
+
+    const contentBlocks = Array.from(morePan.children)
+        .flatMap(child => Array.from(child.children))
+        .filter((child): child is HTMLElement =>
+            child instanceof HTMLElement && child.offsetHeight > 0,
+        )
+    const contentTop = contentBlocks.length > 0
+        ? contentBlocks.reduce(
+            (top, child) => Math.min(top, child.getBoundingClientRect().top),
+            Number.POSITIVE_INFINITY,
+        )
+        : morePan.getBoundingClientRect().top
+    const chatBottom = chatPan.getBoundingClientRect().bottom
+    padding.style.height = Math.max(0, chatBottom - contentTop) + 'px'
+}
+
+function scheduleChatPaddingUpdate(afterUpdate?: () => void) {
+    if (afterUpdate) {
+        chatPaddingAfterUpdate.push(afterUpdate)
+    }
+    if (chatPaddingFrame !== null) {
+        return
+    }
+    chatPaddingFrame = requestAnimationFrame(() => {
+        chatPaddingFrame = null
+        updateChatPadding()
+        const callbacks = chatPaddingAfterUpdate
+        chatPaddingAfterUpdate = []
+        callbacks.forEach(callback => callback())
+    })
+}
+
+function setupChatPaddingObserver() {
+    if (sendMoreResizeObserver !== null) return
+    const morePan = sendMore.value
+    if (!morePan || typeof ResizeObserver === 'undefined') {
+        scheduleChatPaddingUpdate()
+        return
+    }
+    sendMoreResizeObserver = new ResizeObserver(() => {
+        scheduleChatPaddingUpdate()
+    })
+    sendMoreResizeObserver.observe(morePan)
+    scheduleChatPaddingUpdate()
+}
+
 function resizeMainInput(target?: HTMLTextAreaElement | HTMLInputElement | null) {
-    let input = target ?? (document.getElementById('main-input') as HTMLTextAreaElement | HTMLInputElement | null)
-    input = input ?? (document.getElementById('main-input-ex') as HTMLTextAreaElement | HTMLInputElement | null)
+    const input = target ?? mainInput.value
     if (!input) return
     if (!Option.get('use_breakline')) {
+        input.style.height = ''
+        return
+    }
+    if (!(input instanceof HTMLTextAreaElement)) {
         input.style.height = ''
         return
     }
@@ -884,10 +980,26 @@ function resizeMainInput(target?: HTMLTextAreaElement | HTMLInputElement | null)
     if (!input.dataset.baseHeight) {
         input.dataset.baseHeight = String(minHeight)
     }
-    input.style.height = '0'
+
+    const oldTransition = input.style.transition
+    input.style.transition = 'none'
+    const oldOverflow = input.style.overflow
+
     const baseHeight = Number.parseFloat(input.dataset.baseHeight) || minHeight
-    const targetHeight = Math.max(input.scrollHeight, baseHeight)
-    input.style.height = targetHeight + 'px'
+    // Fast-path: if content is empty, reset directly to baseHeight without measuring
+    if (input.value === '') {
+        input.style.height = baseHeight + 'px'
+    } else {
+        // Set overflow:hidden so scrollHeight correctly reflects content height
+        input.style.overflow = 'hidden'
+        input.style.height = '0px'
+        const targetHeight = Math.max(input.scrollHeight - TEXTAREA_SCROLL_HEIGHT_COMPACT_OFFSET, baseHeight)
+        input.style.height = targetHeight + 'px'
+        input.style.overflow = oldOverflow
+    }
+
+    input.getBoundingClientRect()
+    input.style.transition = oldTransition
 }
 function jumpSearchMsg() {
     closeSearch()
@@ -1103,6 +1215,7 @@ function mainKey(event: KeyboardEvent) {
     }
 
     if (tags.value.sendTag == 'READY' && msg.value !== '') {
+        event.preventDefault()
         sendMsg()
     } else {
         if(event.key === 'Enter' &&
@@ -1181,6 +1294,7 @@ function mainKeyUp(event: KeyboardEvent) {
         tags.value.checkNewLineFlag = false
         if (msg.value == '\n'){
             msg.value = ''
+            scheduleResizeMainInput()
         }
     }
 
@@ -2175,9 +2289,7 @@ function sendMsg(echo = 'sendMsgBack') {
     imgCache.value.clear()
     scrollBottom()
     cancelReply()
-    nextTick(() => {
-        resizeMainInput()
-    })
+    scheduleResizeMainInput(undefined, true)
 }
 
 function updateList(newLength: number, oldLength: number) {
@@ -2394,7 +2506,7 @@ function showJin() {
 
 async function handleInput(event: Event) {
     const input = event.target as HTMLInputElement
-    resizeMainInput(input)
+    scheduleResizeMainInput(input)
 
     const diff = getDifferencesWithRanges(msg.value, oldMsg.value)
     let { end, str } = { end: 0, str: '' }
@@ -2461,9 +2573,7 @@ function closeSearch() {
     details.value[3].open = !details.value[3].open
     msg.value = ''
     tags.value.search.list = reactive(list)
-    nextTick(() => {
-        resizeMainInput()
-    })
+    scheduleResizeMainInput()
 }
 
 function sendPoke(userId: number) {
