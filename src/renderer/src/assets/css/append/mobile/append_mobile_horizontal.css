@@ -184,9 +184,6 @@ html {
 .face-pan {
     padding-bottom: 80px;
 }
-.face-pan div.title {
-    margin-bottom: 10px;
-}
 .face-pan div.title > span{
     font-size: 1rem;
 }

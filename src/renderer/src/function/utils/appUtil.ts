@@ -587,8 +587,6 @@ export async function loadMobile() {
         backend.addListener('Keyboard', 'keyboardWillShow', async (info: KeyboardInfo) => {
             const keyboardHeight = info.keyboardHeight
 
-            console.log('键盘高度：', keyboardHeight)
-
             // 调整输入框高度
             const sendMore = document.getElementById('send-more')
             if (sendMore && keyboardHeight > window.innerHeight / 3) {

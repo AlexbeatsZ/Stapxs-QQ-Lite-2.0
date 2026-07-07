@@ -911,12 +911,10 @@ function updateChatPadding() {
         .filter((child): child is HTMLElement =>
             child instanceof HTMLElement && child.offsetHeight > 0,
         )
-    const contentTop = contentBlocks.length > 0
-        ? contentBlocks.reduce(
+    const contentTop = contentBlocks.length > 0? contentBlocks.reduce(
             (top, child) => Math.min(top, child.getBoundingClientRect().top),
             Number.POSITIVE_INFINITY,
-        )
-        : morePan.getBoundingClientRect().top
+        ): morePan.getBoundingClientRect().top
     const chatBottom = chatPan.getBoundingClientRect().bottom
     padding.style.height = Math.max(0, chatBottom - contentTop) + 'px'
 }

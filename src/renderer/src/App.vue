@@ -1,5 +1,7 @@
 <template>
-    <div v-if="dev" :class="'dev-bar' + (backend.platform == 'win32' ? ' win' : '')">
+    <div v-if="dev" id="dev-bar" :class="['dev-bar', 'onloading', {
+        'win': backend.platform == 'win32'
+    }]">
         Stapxs QQ Lite Development Mode
         {{ backend.platform ? ' / platform: ' + backend.platform : '' }}
         {{ ' / client: ' + appClient.type }}
@@ -10,7 +12,9 @@
         {{ tags.musicLyric }}
     </div>
     <div v-if="['linux', 'win32'].includes(backend.platform ?? '')"
-        :class="'top-bar' + ((backend.platform == 'win32' && dev) ? ' win' : '')"
+        :class="['top-bar', {
+            'win': backend.platform == 'win32' && dev
+        }]"
         name="appbar"
         data-tauri-drag-region="true"
         @mousedown="handleAppbarMouseDown">
@@ -27,9 +31,12 @@
     </div>
     <div v-if="backend.platform == 'darwin'" class="controller mac-controller"
         data-tauri-drag-region="true" />
+    <div id="load-view" class="load-view">
+        <font-awesome-icon :icon="['fas', 'circle-notch']" />
+    </div>
     <div id="base-app">
-        <div class="main-body">
-            <ul :style="{ 'padding-bottom': get('fs_adaptation') > 0 ? `${get('fs_adaptation')}px` : '' }">
+        <div class="main-body onloading">
+            <ul id="side-bar" class="onloading" :style="{ 'padding-bottom': get('fs_adaptation') > 0 ? `${get('fs_adaptation')}px` : '' }">
                 <li id="bar-home" :class="(tags.page == 'Home' ? 'active' : '') +
                     (loginInfo.status ? ' hiden-home' : '')"
                     @click="changeTab('主页', 'Home', false)">
@@ -294,7 +301,7 @@
         <Tooltips />
         <div id="mobile-css" />
     </div>
-    <div class="main-bg"
+    <div id="main-bg" class="main-bg onloading"
         :style="{
             'background-image': `url(${settingsStore.sysConfig.chat_more_blur ? settingsStore.sysConfig.chat_background : ''})`,
             'background-position': settingsStore.sysConfig.chat_background_align ?? 'center',
@@ -887,6 +894,22 @@ onMounted(() => {
         }
         // 基础初始化完成
         logger.system('欢迎回来，开发者。Stapxs QQ Lite 正处于 ' + (dev ? 'development' : 'production') + ' 模式。正在为您加载更多功能。')
+        const loadView = document.getElementById('load-view')
+        loadView?.remove()
+        setTimeout(() => {
+            const mainBody = document.getElementById('base-app')?.children[0]
+            const mainBg = document.getElementById('main-bg')
+            mainBody?.classList.remove('onloading')
+            mainBg?.classList.remove('onloading')
+            setTimeout(() => {
+                const sideBar = document.getElementById('side-bar')
+                sideBar?.classList.remove('onloading')
+                setTimeout(() => {
+                    const devBar = document.getElementById('dev-bar')
+                    devBar?.classList.remove('onloading')
+                }, 400)
+            }, 400)
+        }, 100)
         // 加载移动平台特性
         App.loadMobile()
         // 加载额外样式
@@ -1233,7 +1256,7 @@ onUnmounted(() => {
 
 @keyframes panelSlideUp {
     from {
-        transform: translate(-50%, -20%) scale(0.95);
+        transform: translate(-50%, -50%) scale(1.1);
         opacity: 0;
     }
 
@@ -1250,7 +1273,7 @@ onUnmounted(() => {
     }
 
     to {
-        transform: translate(-50%, -5%) scale(0.98);
+        transform: translate(-50%, -50%) scale(1.1);
         opacity: 0;
     }
 }
