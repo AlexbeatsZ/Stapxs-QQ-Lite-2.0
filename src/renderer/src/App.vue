@@ -303,7 +303,7 @@
     </div>
     <div id="main-bg" class="main-bg onloading"
         :style="{
-            'background-image': `url(${settingsStore.sysConfig.chat_more_blur ? settingsStore.sysConfig.chat_background : ''})`,
+            'background-image': toBackgroundImageStyle(settingsStore.sysConfig.chat_more_blur ? settingsStore.sysConfig.chat_background : ''),
             'background-position': settingsStore.sysConfig.chat_background_align ?? 'center',
             'background-size': settingsStore.sysConfig.chat_background_fit ?? 'cover',
             'opacity': 1 - Number(settingsStore.sysConfig.chat_background_blur) / 100 }" />
@@ -333,6 +333,11 @@ import { updateBaseOnMsgList } from './function/utils/msgUtil'
 import { getDeviceType, getForegroundToneFromImageUrl } from './function/utils/systemUtil'
 import { uptime, i18n } from '@renderer/main'
 import { backend } from './runtime/backend'
+import {
+    hydrateBackgroundImage,
+    migrateInlineBackgroundImage,
+    toBackgroundImageStyle,
+} from '@renderer/function/utils/backgroundUtil'
 
 import Options from '@renderer/pages/Options.vue'
 import Friends from '@renderer/pages/Friends.vue'
@@ -867,7 +872,14 @@ onMounted(() => {
             rafLoop()
         }
         // 加载设置项
-        settingsStore.sysConfig = await Option.load()
+        const loadedConfig = await Option.load()
+        const migratedBackground = await migrateInlineBackgroundImage(loadedConfig.chat_background)
+        if (migratedBackground) {
+            loadedConfig.chat_background = migratedBackground
+            Option.runAS('chat_background', migratedBackground)
+        }
+        settingsStore.sysConfig = loadedConfig
+        if (!migratedBackground) hydrateBackgroundImage(settingsStore.sysConfig.chat_background)
         if(dev) {
             logger.debug('stapxs-qq-lite.su:$/mnt/boot/dawnHunt/bin/core --pour /mnt/app/bin/main', true)
             logger.system('[ dawnHuntCore Version: 1.0 Beta, dawnHuntDB: 2025-04-24 ]')

@@ -172,11 +172,11 @@
                 </div>
                 <div class="file-choice">
                     <div class="choice-btn"
-                        @click="choiceImgRef?.click()">
+                        @click="setBackground">
                         {{
                             settingsStore.sysConfig.chat_background
                                 ? $t('更换背景')
-                                : $t('上传背景')
+                                : $t('选择背景')
                         }}
                         <input id="opt-view-chat-background"
                             ref="choiceImgRef"
@@ -184,8 +184,8 @@
                             style="display: none"
                             name="chat_background"
                             accept="image/*"
-                            @change="setBackground($event)">
-                        <label for="opt-view-chat-background" class="sr-only">{{ $t('上传背景图片') }}</label>
+                            @change="setBackgroundFromInput($event)">
+                        <label for="opt-view-chat-background" class="sr-only">{{ $t('选择背景图片') }}</label>
                     </div>
                     <div v-if="settingsStore.sysConfig.chat_background !== ''"
                         class="rm-btn"
@@ -452,6 +452,12 @@ import { getDeviceType } from '@renderer/function/utils/systemUtil'
 import languages from '../../assets/l10n/_l10nconfig.json'
 import { sendIdentifyData } from '@renderer/function/utils/appUtil'
 import { backend } from '@renderer/runtime/backend'
+import {
+    rememberLocalImageUrl,
+    resolveLocalImageUrl,
+    saveBrowserBackgroundImage,
+    type LocalImageInfo,
+} from '@renderer/function/utils/backgroundUtil'
 import { i18n } from '@renderer/main'
 import { useSettingsStore } from '@renderer/state/settings'
 import { useUIStore } from '@renderer/state/ui'
@@ -699,25 +705,29 @@ function changeIcon(name: string) {
 /**
  * 设置背景图片
  */
-function setBackground(event: Event) {
+async function setBackground() {
+    if (backend.isDesktop()) {
+        const image = await backend.call(undefined, 'sys:selectImage', true) as LocalImageInfo | null
+        if (!image) return
+        const imageUrl = await resolveLocalImageUrl(image)
+        settingsStore.sysConfig.chat_background = imageUrl
+        rememberLocalImageUrl(image.path, imageUrl)
+        Option.runAS('chat_background', imageUrl)
+        return
+    }
+    choiceImgRef.value?.click()
+}
+
+async function setBackgroundFromInput(event: Event) {
     const sender = event.target as HTMLInputElement
     const img = sender.files?.[0]
     if (!img) return
-    img.arrayBuffer().then((buffer) => {
-        // 使用更可靠的方式将二进制数据转换为 base64
-        const bytes = new Uint8Array(buffer)
-        let binary = ''
-        const chunkSize = 0x8000 // 32KB chunks to avoid call stack size exceeded
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-            const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length))
-            // 使用 fromCodePoint 为每个字节生成字符并拼接，避免使用 apply 导致的参数长度问题
-            binary += Array.from(chunk, (b) => String.fromCodePoint(b)).join('')
-        }
-        const base64String = btoa(binary)
-        const imgSrc = `data:${img.type};base64,${base64String}`
-        settingsStore.sysConfig.chat_background = imgSrc
-        Option.runAS('chat_background', imgSrc)
-    })
+    const backgroundUrl = await saveBrowserBackgroundImage(img)
+    const imgSrc = URL.createObjectURL(img)
+    rememberLocalImageUrl(backgroundUrl, imgSrc)
+    settingsStore.sysConfig.chat_background = backgroundUrl
+    Option.runAS('chat_background', backgroundUrl)
+    sender.value = ''
 }
 
 /**

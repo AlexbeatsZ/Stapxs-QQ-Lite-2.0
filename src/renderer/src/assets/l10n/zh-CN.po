@@ -1481,7 +1481,7 @@ msgstr ""
 msgid "透明超级加倍！在界面上使用更泛滥的透明和模糊"
 msgstr ""
 
-msgid "上传背景"
+msgid "选择背景"
 msgstr ""
 
 msgid "连接超时"
@@ -1841,7 +1841,7 @@ msgstr ""
 msgid "（试听）"
 msgstr ""
 
-msgid "上传背景图片"
+msgid "选择背景图片"
 msgstr ""
 
 msgid "会话选项"
@@ -1905,4 +1905,7 @@ msgid "等 {count} 人赞了"
 msgstr ""
 
 msgid "{count} 人赞了"
+msgstr ""
+
+msgid "搜索成员"
 msgstr ""

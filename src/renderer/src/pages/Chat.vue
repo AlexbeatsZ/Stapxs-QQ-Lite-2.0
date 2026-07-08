@@ -16,7 +16,7 @@
             (uiStore.openSideBar ? ' open' : '') +
             (['linux', 'win32'].includes(backend.platform ?? '') ? ' withBar' : '')"
         :style="{
-            'background-image': `url(${!settingsStore.sysConfig.chat_more_blur ? settingsStore.sysConfig.chat_background : ''})`,
+            'background-image': toBackgroundImageStyle(!settingsStore.sysConfig.chat_more_blur ? settingsStore.sysConfig.chat_background : ''),
             'background-position': settingsStore.sysConfig.chat_background_align ?? 'center',
             'background-size': settingsStore.sysConfig.chat_background_fit ?? 'cover'
         }"
@@ -614,6 +614,7 @@ import {
     MenuEventData,
 } from '@renderer/function/elements/information'
 import { backend } from '@renderer/runtime/backend'
+import { toBackgroundImageStyle } from '@renderer/function/utils/backgroundUtil'
 import { dbGetBefore, dbGetBeforeByTime, dbSearchMessages } from '@renderer/function/utils/localHistoryUtil'
 import Emoji from '@renderer/function/model/emoji'
 import EmojiFace from '@renderer/components/EmojiFace.vue'
