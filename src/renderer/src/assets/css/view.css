@@ -959,33 +959,45 @@ textarea:focus {
 
 .ss-range {
     --range-dot-height: 26px;
+    --range-dot-border: 3px;
+    --range-dot-width: 3px;
     --range-height: 26px;
+
+    --range-width: calc(var(--range-dot-width) + calc(var(--range-dot-width) * 2));
+    --range-width-half: calc(var(--range-width) / 2);
+
+    position: relative;
     flex-direction: row !important;
     display: flex !important;
 }
 .ss-range input {
     background-image: linear-gradient(var(--color-main), var(--color-main));
+    background-size: calc(var(--range-precent) - var(--range-width)) 100%;
     background-color: var(--color-card-1);
     background-repeat: no-repeat;
     height: var(--range-height);
-    background-size: 0% 100%;
     border-radius: 7px;
+    cursor: pointer;
     min-width: 100%;
 
     -webkit-appearance: none;
     appearance: none;
 }
-.ss-range input::-webkit-slider-thumb,
-.ss-range input::-moz-range-thumb {
-    -webkit-appearance: none;
+.ss-range div {
+    margin-left: max(calc(var(--range-width-half) + 1px),
+        calc(var(--range-precent) - var(--range-width-half) - 1px));
 
-    height: calc(var(--range-dot-height) - 8px);
-    width: calc(var(--range-dot-height) - 8px);
+    border: var(--range-dot-border) solid var(--color-card);
     box-shadow: 0 0 5px var(--color-shader);
+    border-radius: var(--range-width-half);
+    height: var(--range-dot-height);
+    width: var(--range-dot-width);
     background: var(--color-main);
-    border: 5px solid #fff;
-    border-radius: 100%;
-    cursor: pointer;
+    transform: translateX(-50%);
+    pointer-events: none;
+    position: absolute;
+    z-index: 1;
+    top: 1px;
 }
 .ss-range span {
     line-height: var(--range-height);
@@ -993,6 +1005,13 @@ textarea:focus {
     color: var(--color-font);
     pointer-events: none;
     margin-left: -50%;
+}
+.ss-range input::-webkit-slider-thumb,
+.ss-range input::-moz-range-thumb {
+    opacity: 0;
+}
+.ss-range input::-webkit-slider-runnable-track {
+    opacity: 0;
 }
 
 .app-msg {

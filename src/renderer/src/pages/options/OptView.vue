@@ -50,7 +50,7 @@
                 </div>
             </div>
         </div>
-        <div v-if=" !napcat" class="ss-card">
+        <div v-if="!napcat" class="ss-card">
             <header>{{ $t('主题与颜色') }}</header>
             <template v-if="settingsStore.sysConfig.opt_auto_gtk != true">
                 <div id="opt_view_dark" class="opt-item">
@@ -202,10 +202,10 @@
                         <label for="opt-view-background-blur">{{ $t('背景模糊') }}</label>
                         <span>{{ $t('什么都看不见了（恼') }}</span>
                     </div>
-                    <div class="ss-range">
+                    <div class="ss-range" :style="{ '--range-precent': `${settingsStore.sysConfig.chat_background_blur}%` }">
                         <input id="opt-view-background-blur" v-model="settingsStore.sysConfig.chat_background_blur"
-                            :style="{ 'background-size': `${settingsStore.sysConfig.chat_background_blur}% 100%` }"
                             type="range" name="chat_background_blur" @input="save">
+                        <div />
                         <span :style="{ 'color': `var(--color-font${ settingsStore.sysConfig.chat_background_blur > 50 ? '-r' : ''})` }">
                             {{ settingsStore.sysConfig.chat_background_blur }}
                             px</span>
@@ -216,11 +216,11 @@
                         <label for="opt-view-background-opacity">{{ $t('背景透明度') }}</label>
                         <span>{{ $t('什么都看不见了（恼') }}</span>
                     </div>
-                    <div class="ss-range">
+                    <div class="ss-range" :style="{ '--range-precent': `${settingsStore.sysConfig.chat_background_blur}%` }">
                         <input id="opt-view-background-opacity" v-model="settingsStore.sysConfig.chat_background_blur"
-                            :style="{ 'background-size': `${settingsStore.sysConfig.chat_background_blur}% 100%` }"
                             type="range" max="100" name="chat_background_blur"
                             @input="save">
+                        <div />
                         <span :style="{ 'color': `var(--color-font${ settingsStore.sysConfig.chat_background_blur > 50 ? '-r' : ''})` }">
                             {{ settingsStore.sysConfig.chat_background_blur }}
                             %</span>
@@ -372,9 +372,8 @@
                     <label for="opt-view-initial-scale">{{ $t('缩放比例') }}</label>
                     <span>{{ $t('调整页面在移动端的缩放比例') }}</span>
                 </div>
-                <div class="ss-range">
+                <div class="ss-range" :style="{ '--range-precent': `${(initialScaleShow - 0.5) / 0.01}%` }">
                     <input id="opt-view-initial-scale" v-model="settingsStore.sysConfig.initial_scale"
-                        :style="{ 'background-size': `${(initialScaleShow - 0.5) / 0.01}% 100%` }"
                         type="range"
                         min="0.5"
                         max="1.5"
@@ -382,6 +381,7 @@
                         name="initial_scale"
                         @change="scaleSave"
                         @input="setInitialScaleShow">
+                    <div />
                     <span :style="{ 'color': `var(--color-font${initialScaleShow / 0.05 })` }">
                         {{ initialScaleShow }}</span>
                 </div>
@@ -395,9 +395,8 @@
                     <label for="opt-view-fs-adaptation">{{ $t('圆角适配') }}</label>
                     <span>{{ $t('适配全面屏设备防止四角出界') }}</span>
                 </div>
-                <div class="ss-range">
+                <div class="ss-range" :style="{ '--range-precent': `${(fsAdaptationShow / 50) * 100}%` }">
                     <input id="opt-view-fs-adaptation" v-model="settingsStore.sysConfig.fs_adaptation"
-                        :style="{ 'background-size': `${(fsAdaptationShow / 50) * 100}% 100%` }"
                         type="range"
                         min="0"
                         max="50"
@@ -405,6 +404,7 @@
                         name="fs_adaptation"
                         @change="save"
                         @input="setFsAdaptationShow">
+                    <div />
                     <span :style="{ 'color': `var(--color-font${fsAdaptationShow / 50 > 0.5 ? '-r' : ''})` }">
                         {{ fsAdaptationShow }} px
                     </span>
