@@ -17,7 +17,7 @@ export function buildWebSocketUrl(address: string, token?: string) {
     if (token) {
         parsedUrl.searchParams.set('access_token', token)
     }
-    return parsedUrl.toString()
+    return parsedUrl
 }
 
 export class Connector {
@@ -42,12 +42,25 @@ export class Connector {
     }
 
     connect(url: string, token?: string) {
-        const connectionUrl = buildWebSocketUrl(url, token)
-        const displayUrl = new URL(connectionUrl)
-        if (token) {
-            displayUrl.searchParams.delete('access_token')
+        let parsedUrl: URL
+        try {
+            parsedUrl = buildWebSocketUrl(url, token)
+        } catch (e) {
+            this.logger.error('无效的 WebSocket 地址：', e)
+            this.win.webContents.send('onebot:onclose', {
+                code: 1000,
+                message: 'Invalid WebSocket URL',
+                address: url,
+                token: token,
+            })
+            return
         }
-        url = displayUrl.toString()
+
+        const connectionUrl = parsedUrl.toString()
+        if (token) {
+            parsedUrl.searchParams.delete('access_token')
+        }
+        url = parsedUrl.toString()
 
         if (!this.websocket) {
             this.logger.info('正在连接到：', url)
