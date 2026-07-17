@@ -228,7 +228,11 @@
                 <!-- 多选指示器 -->
                 <div :class=" multipleSelectList.length > 0 ? 'select-tag show' : 'select-tag'">
                     <div>
-                        <font-awesome-icon :icon="['fas', 'share']" @click="showForWard" />
+                        <font-awesome-icon :icon="['fas', 'share-from-square']" @click="showForWard('individual')" />
+                        <span>{{ $t('逐条转发') }}</span>
+                    </div>
+                    <div>
+                        <font-awesome-icon :icon="['fas', 'share']" @click="showForWard('merge')" />
                         <span>{{ $t('合并转发') }}</span>
                     </div>
                     <div>
@@ -651,7 +655,10 @@ const chatPadding = useTemplateRef<HTMLSpanElement>('chatPadding')
 const sendMore = useTemplateRef<HTMLDivElement>('sendMore')
 const mainInput = useTemplateRef<HTMLInputElement | HTMLTextAreaElement>('mainInput')
 
+type ForwardMode = 'single' | 'individual' | 'merge'
+
 const multipleSelectList = ref<string[]>([])
+const forwardMode = ref<ForwardMode>('single')
 const tags = ref({
     sendTag: 'REFUSE' as 'READY' | 'PASS' | 'REFUSE',
     showBottomButton: true,
@@ -1657,7 +1664,8 @@ function searchForward(event: Event) {
     )
 }
 
-function showForWard() {
+function showForWard(mode: ForwardMode = 'single') {
+    forwardMode.value = mode
     tags.value.showForwardPan = true
     const showList = Object.assign(contactStore.onMsgList).reverse()
     showList.forEach((item: any) => {
@@ -1690,13 +1698,59 @@ function intoMultipleSelect() {
     closeMsgMenu()
 }
 
+function cloneMessage<T>(message: T): T {
+    return JSON.parse(JSON.stringify(message))
+}
+
 function forwardMsg(data: UserFriendElem & UserGroupElem) {
-    const msgData = selectedMsg.value
+    const msgData = selectedMsg.value ? cloneMessage(selectedMsg.value) : null
     const id = data.group_id ? data.group_id : data.user_id
-    if (multipleSelectList.value.length > 0 && msgData) {
-        const msgList = chatStore.messageList.filter((item) => {
-            return multipleSelectList.value.indexOf(item.message_id) >= 0
-        })
+    const targetId = String(id)
+    const targetType = data.group_id ? 'group' : 'user'
+    const msgList = chatStore.messageList.filter((item) => {
+        return multipleSelectList.value.includes(item.message_id)
+    })
+    const shouldPreShow = () =>
+        String(chat.show.id) === targetId && chat.show.type === targetType
+
+    if (forwardMode.value !== 'single' && msgList.length === 0) {
+        cancelForward()
+        return
+    }
+
+    if (forwardMode.value === 'individual') {
+        const popInfo = {
+            title: $t('逐条转发'),
+            html: $t('将按顺序逐条转发 {count} 条消息，是否继续？', {
+                count: msgList.length,
+            }),
+            button: [
+                {
+                    text: $t('取消'),
+                    fun: () => {
+                        uiStore.popBoxList.shift()
+                    },
+                },
+                {
+                    text: $t('确定'),
+                    master: true,
+                    fun: () => {
+                        msgList.forEach((item) => {
+                            sendMsgRaw(
+                                targetId,
+                                targetType,
+                                cloneMessage(item.message),
+                                shouldPreShow(),
+                            )
+                        })
+                        multipleSelectList.value = []
+                        uiStore.popBoxList.shift()
+                    },
+                },
+            ],
+        }
+        uiStore.popBoxList.push(popInfo)
+    } else if (forwardMode.value === 'merge') {
         const jsonMsg = {
             app: 'com.tencent.multimsg',
             meta: {
@@ -1715,7 +1769,7 @@ function forwardMsg(data: UserFriendElem & UserGroupElem) {
                             }
                         }),
                     ],
-                    summary: $t('查看 {count} 条转发消息', { count: multipleSelectList.value.length }),
+                    summary: $t('查看 {count} 条转发消息', { count: msgList.length }),
                     resid: '',
                 },
             },
@@ -1750,15 +1804,16 @@ function forwardMsg(data: UserFriendElem & UserGroupElem) {
                                 id: item.message_id,
                                 user_id: item.sender.user_id,
                                 nickname: item.sender.nickname,
-                                content: item.message,
+                                content: cloneMessage(item.message),
                             }
                         })
                         sendMsgRaw(
-                            chat.show.id,
-                            chat.show.type,
+                            targetId,
+                            targetType,
                             msgBody,
-                            true,
+                            shouldPreShow(),
                         )
+                        multipleSelectList.value = []
                         uiStore.popBoxList.shift()
                     },
                 },
@@ -1782,10 +1837,10 @@ function forwardMsg(data: UserFriendElem & UserGroupElem) {
                     master: true,
                     fun: () => {
                         sendMsgRaw(
-                            chat.show.id,
-                            chat.show.type,
-                            msgData.message,
-                            true,
+                            targetId,
+                            targetType,
+                            cloneMessage(msgData.message),
+                            shouldPreShow(),
                         )
                         uiStore.popBoxList.shift()
                     },
