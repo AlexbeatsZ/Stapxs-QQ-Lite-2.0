@@ -1938,6 +1938,15 @@ div.tiny-session-body > div:nth-child(3) > div > svg {
 }
 
 @media (max-width: 700px) {
+    /* 多选操作在窄屏下可横向滚动，避免操作项被裁切 */
+    .select-tag.show {
+        justify-content: flex-start;
+        overflow-x: auto;
+    }
+    .select-tag > div {
+        flex: 0 0 auto;
+        min-width: 64px;
+    }
     /* 消息面板 */
     .chat-pan {
         height: calc(100% - 75px - var(--safe-area-bottom));

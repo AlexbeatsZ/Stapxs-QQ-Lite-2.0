@@ -1909,3 +1909,9 @@ msgstr ""
 
 msgid "搜索成员"
 msgstr ""
+
+msgid "逐条转发"
+msgstr ""
+
+msgid "将按顺序逐条转发 {count} 条消息，是否继续？"
+msgstr ""
