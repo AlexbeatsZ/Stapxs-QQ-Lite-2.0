@@ -871,9 +871,10 @@ const msgFunctions = {
                     )
                     // 更新消息列表
                     const onmsg = contactStore.baseOnMsgList.get(Number(id))
-                    if (onmsg) {
+                    if (onmsg && list[0]) {
                         Object.assign(onmsg, formatMessageData(list[0], Boolean(onmsg.group_id)))
                         contactStore.baseOnMsgList.set(id, onmsg)
+                        updateBaseOnMsgList()
                     }
                 }
             } catch (e) {
@@ -1691,7 +1692,7 @@ async function saveMsg(msg: any, append = undefined as undefined | string) {
         chatStore.messageList.forEach((item) => {
             sendMsgAppendInfo(item)
         })
-        // 将消息列表的最后一条 raw_message 保存到用户列表中
+        // 将最新消息同步到会话列表；通过会话 Map 更新以触发 shallowRef 列表刷新。
         const lastMsg =
             chatStore.messageList[chatStore.messageList.length - 1]
         if (lastMsg) {
@@ -1701,14 +1702,17 @@ async function saveMsg(msg: any, append = undefined as undefined | string) {
                     item.user_id == chatStore.chatInfo.show.id
                 )
             })
-            if (user) {
-                if (chatStore.chatInfo.show.type == 'group') {
-                    user.raw_msg =
-                        lastMsg.sender.nickname + ': ' + getMsgRawTxt(lastMsg)
-                } else {
-                    user.raw_msg = getMsgRawTxt(lastMsg)
-                }
-                user.time = getViewTime(Number(lastMsg.time))
+            const sessionId = Number(chatStore.chatInfo.show.id)
+            const session = contactStore.baseOnMsgList.get(sessionId) ?? user
+            if (session) {
+                const preview = formatMessageData(
+                    lastMsg,
+                    chatStore.chatInfo.show.type == 'group',
+                )
+                if (user) Object.assign(user, preview)
+                Object.assign(session, preview)
+                contactStore.baseOnMsgList.set(sessionId, session)
+                updateBaseOnMsgList()
             }
         }
 
@@ -2228,6 +2232,7 @@ function newMsg(_: string, data: any) {
                 if (isImportant) { session.highlight = $t('[特別关心]') }
             }
             contactStore.baseOnMsgList.set(sessionId, session)
+            updateBaseOnMsgList()
         }
 
         // 通知判定 ============================================

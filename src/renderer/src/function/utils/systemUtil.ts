@@ -525,6 +525,53 @@ export function getViewTime(time: number) {
 }
 
 /**
+ * 格式化会话列表中的最新消息时间。
+ * 今天显示时间，本周显示星期和时间，更早的消息显示日期。
+ */
+export function formatSessionTime(time: number | undefined, now = new Date()) {
+    if (time === undefined) return ''
+
+    const viewTime = getViewTime(Number(time))
+    const date = new Date(viewTime)
+    if (!Number.isFinite(viewTime) || Number.isNaN(date.getTime())) return ''
+
+    const startOfToday = new Date(now)
+    startOfToday.setHours(0, 0, 0, 0)
+    const startOfTomorrow = new Date(startOfToday)
+    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1)
+
+    const startOfWeek = new Date(startOfToday)
+    const daysSinceMonday = (startOfWeek.getDay() + 6) % 7
+    startOfWeek.setDate(startOfWeek.getDate() - daysSinceMonday)
+    const startOfNextWeek = new Date(startOfWeek)
+    startOfNextWeek.setDate(startOfNextWeek.getDate() + 7)
+
+    let config: Intl.DateTimeFormatOptions
+    if (date >= startOfToday && date < startOfTomorrow) {
+        config = {
+            hour: 'numeric',
+            minute: 'numeric',
+        }
+    } else if (date >= startOfWeek && date < startOfNextWeek) {
+        config = {
+            weekday: 'short',
+            hour: 'numeric',
+            minute: 'numeric',
+        }
+    } else {
+        config = {
+            month: 'short',
+            day: 'numeric',
+        }
+        if (date.getFullYear() !== now.getFullYear()) {
+            config.year = 'numeric'
+        }
+    }
+
+    return Intl.DateTimeFormat(getTrueLang(), config).format(date)
+}
+
+/**
  * 获取时间的配置
  * @param date
  * @returns
