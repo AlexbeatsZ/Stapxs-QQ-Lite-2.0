@@ -18,6 +18,10 @@ import { useContactStore } from '@renderer/state/contact'
 import { useUIStore } from '@renderer/state/ui'
 import { useAuthStore } from '@renderer/state/auth'
 import { useChatStore } from '@renderer/state/chat'
+import {
+    findSessionContact,
+    getSessionId,
+} from './sessionUtil'
 
 const logger = new Logger()
 
@@ -480,9 +484,7 @@ export function sendMsgRaw(
         // 发送方不一定会上报自身消息事件，先用预发送消息同步会话预览。
         const sessionId = Number(String(id).split('/')[0])
         const session = contactStore.baseOnMsgList.get(sessionId) ??
-            contactStore.userList.find((item) => {
-                return item.user_id === sessionId || item.group_id === sessionId
-            })
+            findSessionContact(contactStore.userList, sessionId)
         if (session) {
             const raw = getMsgRawTxt(showMsg)
             const senderName = authStore.loginInfo.nickname
@@ -580,10 +582,6 @@ export function updateLastestHistory(item: UserFriendElem & UserGroupElem) {
         },
         'getChatHistoryOnMsg_' + id,
     )
-}
-
-function getSessionId(item: UserFriendElem & UserGroupElem) {
-    return Number(item.user_id ?? item.group_id)
 }
 
 function getSessionTime(item: UserFriendElem & UserGroupElem) {
