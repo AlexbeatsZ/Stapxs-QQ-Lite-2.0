@@ -67,6 +67,11 @@ import { useStickerStore } from '@renderer/state/sticker'
 import { useUIStore } from '@renderer/state/ui'
 import { useSettingsStore } from '@renderer/state/settings'
 import { useQzoneStore } from '@renderer/state/qzone'
+import {
+    getSessionId,
+    mergeSessionState,
+    resolveIncomingSession,
+} from './utils/sessionUtil'
 
 const popInfo = new PopInfo()
 // eslint-disable-next-line
@@ -1530,6 +1535,17 @@ function saveUser(msg: { [key: string]: any }, type: string) {
             hydrateContactPinyinLater(list)
         }
         sortContactListByPinyin(list)
+        // 实时消息可能比联系人列表更早到达；用真实联系人资料接管临时会话，保留预览状态。
+        list.forEach((item) => {
+            const sessionId = getSessionId(item)
+            const currentSession = contactStore.baseOnMsgList.get(sessionId)
+            if (currentSession && currentSession !== item) {
+                contactStore.baseOnMsgList.set(
+                    sessionId,
+                    mergeSessionState(item, currentSession),
+                )
+            }
+        })
         contactStore.userList = contactStore.userList.concat(list)
         if (settingsStore.sysConfig.session_display_mode === 'all') {
             updateBaseOnMsgList()
@@ -2208,9 +2224,12 @@ function newMsg(_: string, data: any) {
                     group_name: '',
                 } as UserFriendElem & UserGroupElem
             } else {
-                session = contactStore.userList.find((item) => {
-                    return item.user_id === id || item.group_id === id
-                })
+                session = resolveIncomingSession(
+                    contactStore.userList,
+                    sessionId,
+                    isGroupMessage,
+                    data.sender?.nickname,
+                )
             }
         }
         if (session) {
