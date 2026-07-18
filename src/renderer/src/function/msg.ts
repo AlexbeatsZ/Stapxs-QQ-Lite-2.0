@@ -69,8 +69,10 @@ import { useSettingsStore } from '@renderer/state/settings'
 import { useQzoneStore } from '@renderer/state/qzone'
 import {
     getSessionId,
+    getMissingGroupPreviewSessions,
     mergeSessionState,
     resolveIncomingSession,
+    type SessionContact,
 } from './utils/sessionUtil'
 
 const popInfo = new PopInfo()
@@ -87,6 +89,9 @@ if (msgPathAt != undefined) {
 // 其他 tag
 let listLoadTimes = 0
 const logger = new Logger()
+const GROUP_PREVIEW_HYDRATION_INTERVAL_MS = 150
+let groupPreviewHydrationQueue: SessionContact[] = []
+let groupPreviewHydrationTimer: ReturnType<typeof setTimeout> | undefined
 let firstHeartbeatTime = -1
 let heartbeatTime = -1
 const MILLISECONDS_PER_SECOND = 1000
@@ -106,6 +111,60 @@ export function clearLoginWaveTimer() {
         clearInterval(loginWaveTimer)
         loginWaveTimer = null
     }
+}
+
+function processGroupPreviewHydrationQueue() {
+    if (groupPreviewHydrationTimer || groupPreviewHydrationQueue.length === 0) {
+        return
+    }
+
+    const contactStore = useContactStore()
+    const session = groupPreviewHydrationQueue.shift()
+    if (session) {
+        const sessionId = getSessionId(session)
+        if (
+            Number.isFinite(sessionId) &&
+            sessionId > 0 &&
+            !session.time &&
+            !session.raw_msg &&
+            !contactStore.baseOnMsgList.has(sessionId)
+        ) {
+            contactStore.baseOnMsgList.set(sessionId, session)
+            updateLastestHistory(session)
+        }
+    }
+
+    groupPreviewHydrationTimer = setTimeout(() => {
+        groupPreviewHydrationTimer = undefined
+        processGroupPreviewHydrationQueue()
+    }, GROUP_PREVIEW_HYDRATION_INTERVAL_MS)
+}
+
+function scheduleMissingGroupPreviewHydration() {
+    const contactStore = useContactStore()
+    const settingsStore = useSettingsStore()
+    if (settingsStore.sysConfig.session_display_mode !== 'all') return
+
+    const queuedIds = new Set(
+        groupPreviewHydrationQueue.map((item) => getSessionId(item)),
+    )
+    getMissingGroupPreviewSessions(
+        contactStore.userList,
+        contactStore.baseOnMsgList,
+    ).forEach((item) => {
+        if (!queuedIds.has(getSessionId(item))) {
+            groupPreviewHydrationQueue.push(item)
+        }
+    })
+    processGroupPreviewHydrationQueue()
+}
+
+function clearGroupPreviewHydrationQueue() {
+    if (groupPreviewHydrationTimer) {
+        clearTimeout(groupPreviewHydrationTimer)
+        groupPreviewHydrationTimer = undefined
+    }
+    groupPreviewHydrationQueue = []
 }
 
 function resolveContactPinyinName(item: UserFriendElem | UserGroupElem) {
@@ -1313,6 +1372,8 @@ const msgFunctions = {
                 }
             })
         }
+        // “显示全部会话”会包含 recent_contact 之外的群；限流补取这些群的最后一条历史。
+        scheduleMissingGroupPreviewHydration()
     },
 
     /**
@@ -2356,6 +2417,7 @@ export function resetRimtime(resetAll = false) {
     firstHeartbeatTime = -1
     heartbeatTime = -1
     clearMetaEventWatchdog()
+    clearGroupPreviewHydrationQueue()
     if (resetAll) {
         // Reset auth store
         const authStore = useAuthStore()
