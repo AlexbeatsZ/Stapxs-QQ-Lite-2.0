@@ -18,6 +18,21 @@ export function findSessionContact(
     })
 }
 
+export function getMissingGroupPreviewSessions(
+    contacts: SessionContact[],
+    knownSessions: ReadonlyMap<number, SessionContact>,
+) {
+    return contacts.filter((item) => {
+        const sessionId = getSessionId(item)
+        return Boolean(item.group_id) &&
+            Number.isFinite(sessionId) &&
+            sessionId > 0 &&
+            !item.time &&
+            !item.raw_msg &&
+            !knownSessions.has(sessionId)
+    })
+}
+
 export function resolveIncomingSession(
     contacts: SessionContact[],
     sessionId: number,
