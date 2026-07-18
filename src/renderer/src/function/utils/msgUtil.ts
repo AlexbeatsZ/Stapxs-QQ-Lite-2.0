@@ -432,6 +432,7 @@ export function sendMsgRaw(
 ) {
     const chatStore = useChatStore()
     const authStore = useAuthStore()
+    const contactStore = useContactStore()
     const uiStore = useUIStore()
     // 如果消息为空则不发送
     if (msg == undefined || msg == '' || (Array.isArray(msg) && msg.length == 0)) {
@@ -475,6 +476,25 @@ export function sendMsgRaw(
             showMsg.user_id = chatStore.chatInfo.show.id
         }
         chatStore.messageList = chatStore.messageList.concat([showMsg])
+
+        // 发送方不一定会上报自身消息事件，先用预发送消息同步会话预览。
+        const sessionId = Number(String(id).split('/')[0])
+        const session = contactStore.baseOnMsgList.get(sessionId) ??
+            contactStore.userList.find((item) => {
+                return item.user_id === sessionId || item.group_id === sessionId
+            })
+        if (session) {
+            const raw = getMsgRawTxt(showMsg)
+            const senderName = authStore.loginInfo.nickname
+            Object.assign(session, {
+                message_id: showMsg.message_id,
+                raw_msg: type === 'group' && senderName ? `${senderName}: ${raw}` : raw,
+                raw_msg_base: raw,
+                time: showMsg.time * 1000,
+            })
+            contactStore.baseOnMsgList.set(sessionId, session)
+            updateBaseOnMsgList()
+        }
     }
     // 检查消息体是否需要处理
     if (uiStore.msgType == BotMsgType.Array) {
