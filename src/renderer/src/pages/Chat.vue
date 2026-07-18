@@ -1668,7 +1668,7 @@ function searchForward(event: Event) {
 function showForWard(action: ForwardAction = 'single-message') {
     selectedForwardAction.value = action
     tags.value.showForwardPan = true
-    const showList = Object.assign(contactStore.onMsgList).reverse()
+    const showList = [...contactStore.onMsgList].reverse()
     showList.forEach((item: any) => {
         const index = forwardList.value.indexOf(item)
         if (index > -1) {
