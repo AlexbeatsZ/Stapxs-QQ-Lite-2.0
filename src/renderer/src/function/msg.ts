@@ -50,6 +50,7 @@ import {
     UserFriendElem,
     UserGroupElem,
     MsgItemElem,
+    type Session,
 } from './elements/information'
 import { NotifyInfo } from './elements/system'
 import { Notify } from './notify'
@@ -70,9 +71,8 @@ import { useQzoneStore } from '@renderer/state/qzone'
 import {
     getSessionId,
     getMissingGroupPreviewSessions,
-    mergeSessionState,
+    mergeEarlySessionContacts,
     resolveIncomingSession,
-    type SessionContact,
 } from './utils/sessionUtil'
 
 const popInfo = new PopInfo()
@@ -89,9 +89,6 @@ if (msgPathAt != undefined) {
 // 其他 tag
 let listLoadTimes = 0
 const logger = new Logger()
-const GROUP_PREVIEW_HYDRATION_INTERVAL_MS = 150
-let groupPreviewHydrationQueue: SessionContact[] = []
-let groupPreviewHydrationTimer: ReturnType<typeof setTimeout> | undefined
 let firstHeartbeatTime = -1
 let heartbeatTime = -1
 const MILLISECONDS_PER_SECOND = 1000
@@ -113,59 +110,69 @@ export function clearLoginWaveTimer() {
     }
 }
 
-function processGroupPreviewHydrationQueue() {
-    if (groupPreviewHydrationTimer || groupPreviewHydrationQueue.length === 0) {
-        return
+const groupPreviewHydrator = (() => {
+    const intervalMs = 150
+    let queue: Session[] = []
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    function stop() {
+        if (timer) clearTimeout(timer)
+        timer = undefined
     }
 
-    const contactStore = useContactStore()
-    const session = groupPreviewHydrationQueue.shift()
-    if (session) {
-        const sessionId = getSessionId(session)
-        if (
-            Number.isFinite(sessionId) &&
-            sessionId > 0 &&
-            !session.time &&
-            !session.raw_msg &&
-            !contactStore.baseOnMsgList.has(sessionId)
-        ) {
-            contactStore.baseOnMsgList.set(sessionId, session)
-            updateLastestHistory(session)
+    function tick() {
+        timer = undefined
+        const contactStore = useContactStore()
+        const session = queue.shift()
+        if (session) {
+            const sessionId = getSessionId(session)
+            if (
+                Number.isFinite(sessionId) &&
+                sessionId > 0 &&
+                !session.time &&
+                !session.raw_msg &&
+                !contactStore.baseOnMsgList.has(sessionId)
+            ) {
+                // userList 与 baseOnMsgList 共享同一个会话对象；历史响应会原地补全预览。
+                contactStore.baseOnMsgList.set(sessionId, session)
+                updateLastestHistory(session)
+            }
+        }
+
+        if (queue.length > 0) {
+            timer = setTimeout(tick, intervalMs)
         }
     }
 
-    groupPreviewHydrationTimer = setTimeout(() => {
-        groupPreviewHydrationTimer = undefined
-        processGroupPreviewHydrationQueue()
-    }, GROUP_PREVIEW_HYDRATION_INTERVAL_MS)
-}
-
-function scheduleMissingGroupPreviewHydration() {
-    const contactStore = useContactStore()
-    const settingsStore = useSettingsStore()
-    if (settingsStore.sysConfig.session_display_mode !== 'all') return
-
-    const queuedIds = new Set(
-        groupPreviewHydrationQueue.map((item) => getSessionId(item)),
-    )
-    getMissingGroupPreviewSessions(
-        contactStore.userList,
-        contactStore.baseOnMsgList,
-    ).forEach((item) => {
-        if (!queuedIds.has(getSessionId(item))) {
-            groupPreviewHydrationQueue.push(item)
-        }
-    })
-    processGroupPreviewHydrationQueue()
-}
-
-function clearGroupPreviewHydrationQueue() {
-    if (groupPreviewHydrationTimer) {
-        clearTimeout(groupPreviewHydrationTimer)
-        groupPreviewHydrationTimer = undefined
+    function start() {
+        if (!timer && queue.length > 0) tick()
     }
-    groupPreviewHydrationQueue = []
-}
+
+    return {
+        scheduleMissingSessions() {
+            const contactStore = useContactStore()
+            const settingsStore = useSettingsStore()
+            if (settingsStore.sysConfig.session_display_mode !== 'all') return
+
+            const queuedIds = new Set(queue.map((item) => getSessionId(item)))
+            getMissingGroupPreviewSessions(
+                contactStore.userList,
+                contactStore.baseOnMsgList,
+            ).forEach((item) => {
+                const sessionId = getSessionId(item)
+                if (!queuedIds.has(sessionId)) {
+                    queue.push(item)
+                    queuedIds.add(sessionId)
+                }
+            })
+            start()
+        },
+        reset() {
+            stop()
+            queue = []
+        },
+    }
+})()
 
 function resolveContactPinyinName(item: UserFriendElem | UserGroupElem) {
     if ((item as UserFriendElem).group_id) {
@@ -1373,7 +1380,7 @@ const msgFunctions = {
             })
         }
         // “显示全部会话”会包含 recent_contact 之外的群；限流补取这些群的最后一条历史。
-        scheduleMissingGroupPreviewHydration()
+        groupPreviewHydrator.scheduleMissingSessions()
     },
 
     /**
@@ -1597,18 +1604,15 @@ function saveUser(msg: { [key: string]: any }, type: string) {
         }
         sortContactListByPinyin(list)
         // 实时消息可能比联系人列表更早到达；用真实联系人资料接管临时会话，保留预览状态。
-        list.forEach((item) => {
-            const sessionId = getSessionId(item)
-            const currentSession = contactStore.baseOnMsgList.get(sessionId)
-            if (currentSession && currentSession !== item) {
-                contactStore.baseOnMsgList.set(
-                    sessionId,
-                    mergeSessionState(item, currentSession),
-                )
-            }
-        })
+        const didMergeEarlySessions = mergeEarlySessionContacts(
+            list,
+            contactStore.baseOnMsgList,
+        )
         contactStore.userList = contactStore.userList.concat(list)
-        if (settingsStore.sysConfig.session_display_mode === 'all') {
+        if (
+            settingsStore.sysConfig.session_display_mode === 'all' ||
+            didMergeEarlySessions
+        ) {
             updateBaseOnMsgList()
         }
         // 刷新置顶列表
@@ -2417,7 +2421,7 @@ export function resetRimtime(resetAll = false) {
     firstHeartbeatTime = -1
     heartbeatTime = -1
     clearMetaEventWatchdog()
-    clearGroupPreviewHydrationQueue()
+    groupPreviewHydrator.reset()
     if (resetAll) {
         // Reset auth store
         const authStore = useAuthStore()
