@@ -228,7 +228,11 @@
                 <!-- 多选指示器 -->
                 <div :class=" multipleSelectList.length > 0 ? 'select-tag show' : 'select-tag'">
                     <div>
-                        <font-awesome-icon :icon="['fas', 'share']" @click="showForWard" />
+                        <font-awesome-icon :icon="['fas', 'share-from-square']" @click="showForWard('individual-messages')" />
+                        <span>{{ $t('逐条转发') }}</span>
+                    </div>
+                    <div>
+                        <font-awesome-icon :icon="['fas', 'share']" @click="showForWard('merged-messages')" />
                         <span>{{ $t('合并转发') }}</span>
                     </div>
                     <div>
@@ -651,7 +655,10 @@ const chatPadding = useTemplateRef<HTMLSpanElement>('chatPadding')
 const sendMore = useTemplateRef<HTMLDivElement>('sendMore')
 const mainInput = useTemplateRef<HTMLInputElement | HTMLTextAreaElement>('mainInput')
 
+type ForwardAction = 'single-message' | 'individual-messages' | 'merged-messages'
+
 const multipleSelectList = ref<string[]>([])
+const selectedForwardAction = ref<ForwardAction>('single-message')
 const tags = ref({
     sendTag: 'REFUSE' as 'READY' | 'PASS' | 'REFUSE',
     showBottomButton: true,
@@ -1638,6 +1645,7 @@ function consoleLogMsg() {
 function cancelForward() {
     forwardList.value = contactStore.userList
     tags.value.showForwardPan = false
+    selectedForwardAction.value = 'single-message'
     closeMsgMenu()
 }
 
@@ -1657,9 +1665,10 @@ function searchForward(event: Event) {
     )
 }
 
-function showForWard() {
+function showForWard(action: ForwardAction = 'single-message') {
+    selectedForwardAction.value = action
     tags.value.showForwardPan = true
-    const showList = Object.assign(contactStore.onMsgList).reverse()
+    const showList = [...contactStore.onMsgList].reverse()
     showList.forEach((item: any) => {
         const index = forwardList.value.indexOf(item)
         if (index > -1) {
@@ -1690,13 +1699,65 @@ function intoMultipleSelect() {
     closeMsgMenu()
 }
 
+function cloneMessagePayload<T>(payload: T): T {
+    if (typeof structuredClone === 'function') {
+        return structuredClone(payload)
+    }
+    // OneBot message payloads are plain JSON data; this fallback is only for
+    // older WebViews without structuredClone support.
+    return JSON.parse(JSON.stringify(payload))
+}
+
 function forwardMsg(data: UserFriendElem & UserGroupElem) {
-    const msgData = selectedMsg.value
+    const forwardAction = selectedForwardAction.value
+    const msgData = selectedMsg.value ? cloneMessagePayload(selectedMsg.value) : null
     const id = data.group_id ? data.group_id : data.user_id
-    if (multipleSelectList.value.length > 0 && msgData) {
-        const msgList = chatStore.messageList.filter((item) => {
-            return multipleSelectList.value.indexOf(item.message_id) >= 0
-        })
+    const targetId = String(id)
+    const targetType = data.group_id ? 'group' : 'user'
+    const msgList = chatStore.messageList.filter((item) => {
+        return multipleSelectList.value.includes(item.message_id)
+    })
+    const shouldPreShow = () =>
+        String(chat.show.id) === targetId && chat.show.type === targetType
+
+    if (forwardAction !== 'single-message' && msgList.length === 0) {
+        cancelForward()
+        return
+    }
+
+    if (forwardAction === 'individual-messages') {
+        const popInfo = {
+            title: $t('逐条转发'),
+            html: $t('将按顺序逐条转发 {count} 条消息，是否继续？', {
+                count: msgList.length,
+            }),
+            button: [
+                {
+                    text: $t('取消'),
+                    fun: () => {
+                        uiStore.popBoxList.shift()
+                    },
+                },
+                {
+                    text: $t('确定'),
+                    master: true,
+                    fun: () => {
+                        msgList.forEach((item) => {
+                            sendMsgRaw(
+                                targetId,
+                                targetType,
+                                cloneMessagePayload(item.message),
+                                shouldPreShow(),
+                            )
+                        })
+                        multipleSelectList.value = []
+                        uiStore.popBoxList.shift()
+                    },
+                },
+            ],
+        }
+        uiStore.popBoxList.push(popInfo)
+    } else if (forwardAction === 'merged-messages') {
         const jsonMsg = {
             app: 'com.tencent.multimsg',
             meta: {
@@ -1715,7 +1776,7 @@ function forwardMsg(data: UserFriendElem & UserGroupElem) {
                             }
                         }),
                     ],
-                    summary: $t('查看 {count} 条转发消息', { count: multipleSelectList.value.length }),
+                    summary: $t('查看 {count} 条转发消息', { count: msgList.length }),
                     resid: '',
                 },
             },
@@ -1750,15 +1811,16 @@ function forwardMsg(data: UserFriendElem & UserGroupElem) {
                                 id: item.message_id,
                                 user_id: item.sender.user_id,
                                 nickname: item.sender.nickname,
-                                content: item.message,
+                                content: cloneMessagePayload(item.message),
                             }
                         })
                         sendMsgRaw(
-                            chat.show.id,
-                            chat.show.type,
+                            targetId,
+                            targetType,
                             msgBody,
-                            true,
+                            shouldPreShow(),
                         )
+                        multipleSelectList.value = []
                         uiStore.popBoxList.shift()
                     },
                 },
@@ -1782,10 +1844,10 @@ function forwardMsg(data: UserFriendElem & UserGroupElem) {
                     master: true,
                     fun: () => {
                         sendMsgRaw(
-                            chat.show.id,
-                            chat.show.type,
-                            msgData.message,
-                            true,
+                            targetId,
+                            targetType,
+                            cloneMessagePayload(msgData.message),
+                            shouldPreShow(),
                         )
                         uiStore.popBoxList.shift()
                     },
