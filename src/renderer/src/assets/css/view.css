@@ -963,7 +963,7 @@ textarea:focus {
     --range-dot-width: 3px;
     --range-height: 26px;
 
-    --range-width: calc(var(--range-dot-width) + calc(var(--range-dot-width) * 2));
+    --range-width: calc(var(--range-dot-width) + calc(var(--range-dot-border) * 2));
     --range-width-half: calc(var(--range-width) / 2);
 
     position: relative;

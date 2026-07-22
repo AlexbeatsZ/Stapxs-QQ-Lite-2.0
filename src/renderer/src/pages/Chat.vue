@@ -579,6 +579,7 @@ import {
     nextTick,
     reactive,
     inject,
+    toRaw,
     useTemplateRef,
 } from 'vue'
 import { v4 as uuid } from 'uuid'
@@ -1700,12 +1701,15 @@ function intoMultipleSelect() {
 }
 
 function cloneMessagePayload<T>(payload: T): T {
+    const rawPayload = toRaw(payload)
     if (typeof structuredClone === 'function') {
-        return structuredClone(payload)
+        try {
+            return structuredClone(rawPayload)
+        } catch {
+            return JSON.parse(JSON.stringify(rawPayload))
+        }
     }
-    // OneBot message payloads are plain JSON data; this fallback is only for
-    // older WebViews without structuredClone support.
-    return JSON.parse(JSON.stringify(payload))
+    return JSON.parse(JSON.stringify(rawPayload))
 }
 
 function forwardMsg(data: UserFriendElem & UserGroupElem) {
