@@ -121,6 +121,7 @@ export const optDefault: { [key: string]: any } = {
     msg_type: 2,
     log_level: 'err',
     debug_msg: false,
+    follow_page_host: false,
     custom_css: '',
     // Glagame
     openai_api: '',

@@ -22,6 +22,7 @@ import { backend } from '@renderer/runtime/backend'
 import { useSettingsStore } from '@renderer/state/settings'
 import { useAuthStore } from '@renderer/state/auth'
 import { useConnectionStore } from '@renderer/state/connection'
+import { followPageHostname } from './utils/connectionAddress'
 
 const logger = new Logger()
 const popInfo = new PopInfo()
@@ -137,6 +138,11 @@ export class Connector {
             return
         }
 
+        let connectionAddress = address
+        if (settingsStore.sysConfig.follow_page_host) {
+            connectionAddress = followPageHostname(address, window.location.hostname)
+        }
+
         if(import.meta.env.VITE_APP_SSE_MODE == 'true') {
             if(import.meta.env.VITE_APP_SSE_SUPPORT == 'false') {
                 // 如果 Bot 不支持 SSE 连接，直接跳过触发连接完成的后续操作
@@ -174,18 +180,19 @@ export class Connector {
                 return
             }
 
-            let url = appendAccessToken(withWebSocketProtocol(address, false), token)
-            if (address.startsWith(WS_PROTOCOL) || address.startsWith(WSS_PROTOCOL)) {
-                url = appendAccessToken(address, token)
+            let url = appendAccessToken(withWebSocketProtocol(connectionAddress, false), token)
+            if (connectionAddress.startsWith(WS_PROTOCOL) ||
+                connectionAddress.startsWith(WSS_PROTOCOL)) {
+                url = appendAccessToken(connectionAddress, token)
             } else if (wss == undefined) {
                 // 判断连接类型
                 if (document.location.protocol == 'https:') {
                     // 判断连接 URL 的协议，https 优先尝试 wss
                     settingsStore.connectSsl = true
-                    url = appendAccessToken(withWebSocketProtocol(address, true), token)
+                    url = appendAccessToken(withWebSocketProtocol(connectionAddress, true), token)
                 }
             } else {
-                url = appendAccessToken(withWebSocketProtocol(address, true), token)
+                url = appendAccessToken(withWebSocketProtocol(connectionAddress, true), token)
             }
 
             if (!websocket) {

@@ -7,6 +7,32 @@
 
 <template>
     <div class="opt-page">
+        <div v-if="backend.isWeb()" class="ss-card">
+            <header>{{ $t('网络') }}</header>
+            <div class="opt-item">
+                <div :class="checkDefault('follow_page_host')" />
+                <font-awesome-icon :icon="['fas', 'route']" />
+                <div>
+                    <label for="opt-dev-follow-page-host">
+                        {{ $t('连接地址跟随当前网页主机') }}
+                    </label>
+                    <span>{{
+                        $t('连接时使用当前网页的主机名，并保留账号地址中的协议、端口和路径。适合通过局域网、隧道或反向代理访问网页版。')
+                    }}</span>
+                </div>
+                <label class="ss-switch">
+                    <input
+                        id="opt-dev-follow-page-host"
+                        v-model="settingsStore.sysConfig.follow_page_host"
+                        type="checkbox"
+                        name="follow_page_host"
+                        @change="save">
+                    <div>
+                        <div />
+                    </div>
+                </label>
+            </div>
+        </div>
         <div v-if="!napcat" class="ss-card">
             <header>{{ $t('兼容选项') }}</header>
             <div class="tip">
