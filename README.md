@@ -158,6 +158,21 @@ yarn lint
 yarn build
 ```
 
+#### 服务器代连模式
+
+网页版默认由浏览器直接连接 OneBot，因此连接地址中的 `127.0.0.1` 指向浏览器所在设备。如果希望所有地址都从部署网页的服务器视角解释，可以构建带 WebSocket 中继的可选镜像：
+
+``` bash
+docker build -f dockerfile.relay -t stapxs-qq-lite:relay .
+docker run -d --name stapxs-qq -p 8081:8080 \
+    -e SSQQ_ENABLE_WS_RELAY=true \
+    stapxs-qq-lite:relay
+```
+
+该可选镜像会为新配置默认开启 `设置 → 高级 → 网络 → 通过网页服务器连接`，也可以在这里随时关闭。账号地址会原样交给服务器拨号，例如 `ws://127.0.0.1:3002/` 表示服务器本机的 `3002` 端口，局域网 IP 也从服务器所在网络访问。
+
+中继默认只允许回环、私有局域网和 CGNAT/Tailscale 地址，并校验请求来自同源网页。在 Docker 中，回环地址通过 `host.docker.internal` 访问宿主机；Linux Docker 可能还需要添加 `--add-host host.docker.internal:host-gateway`。
+
 #### SSE 模式
 Stapxs QQ Lite 支持 SSE 模式。在此模式下，应用将以 HTTP SSE + HTTP API 的方式连接到 QQ Bot 后端，提供更快速和轻量化的连接；甚至可以直接禁用 SSE 通知推送，仅使用 HTTP API 进行通信。
 

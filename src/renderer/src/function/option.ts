@@ -31,6 +31,7 @@ import {
 import { updateBaseOnMsgList } from './utils/msgUtil'
 import { backend } from '@renderer/runtime/backend'
 import { refreshFavicon } from './favicon'
+import { isServerRelayDefaultEnabled } from './utils/serverRelay'
 
 let cacheConfigs: { [key: string]: any }
 
@@ -121,7 +122,7 @@ export const optDefault: { [key: string]: any } = {
     msg_type: 2,
     log_level: 'err',
     debug_msg: false,
-    follow_page_host: false,
+    connect_via_server: isServerRelayDefaultEnabled(document),
     custom_css: '',
     // Glagame
     openai_api: '',

@@ -4,3 +4,4 @@
 src/tauri/crates/user-notify/** linguist-vendored -diff
 *.svg linguist-generated
 yarn.lock linguist-generated -diff
+server/websocket-relay/start.sh text eol=lf

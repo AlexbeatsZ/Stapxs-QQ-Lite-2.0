@@ -156,6 +156,21 @@ yarn lint
 yarn build
 ```
 
+#### Server-side Connection Mode
+
+By default, the web client connects to OneBot directly from the browser, so `127.0.0.1` in a connection address refers to the browser device. To interpret every address from the web server's network perspective, build the optional image with the WebSocket relay:
+
+``` bash
+docker build -f dockerfile.relay -t stapxs-qq-lite:relay .
+docker run -d --name stapxs-qq -p 8081:8080 \
+    -e SSQQ_ENABLE_WS_RELAY=true \
+    stapxs-qq-lite:relay
+```
+
+For new configurations, this optional image enables `Settings → Advanced → Network → Connect through the web server` by default; it can still be turned off there. The account address is passed to the server unchanged: for example, `ws://127.0.0.1:3002/` means port `3002` on the server, while LAN addresses are reached from the server's network.
+
+The relay only permits loopback, private LAN, and CGNAT/Tailscale addresses by default, and it accepts same-origin web requests only. In Docker, loopback addresses use `host.docker.internal` to reach the host; Linux Docker may additionally require `--add-host host.docker.internal:host-gateway`.
+
 #### SSE Mode
 Stapxs QQ Lite supports SSE mode. In this mode, the application connects to the QQ Bot backend via HTTP SSE + HTTP API, providing a faster and more lightweight connection; you can even disable SSE event push entirely and communicate only via HTTP API.
 

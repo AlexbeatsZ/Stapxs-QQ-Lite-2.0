@@ -10,22 +10,22 @@
         <div v-if="backend.isWeb()" class="ss-card">
             <header>{{ $t('网络') }}</header>
             <div class="opt-item">
-                <div :class="checkDefault('follow_page_host')" />
-                <font-awesome-icon :icon="['fas', 'route']" />
+                <div :class="checkDefault('connect_via_server')" />
+                <font-awesome-icon :icon="['fas', 'server']" />
                 <div>
-                    <label for="opt-dev-follow-page-host">
-                        {{ $t('连接地址跟随当前网页主机') }}
+                    <label for="opt-dev-connect-via-server">
+                        {{ $t('通过网页服务器连接') }}
                     </label>
                     <span>{{
-                        $t('连接时使用当前网页的主机名，并保留账号地址中的协议、端口和路径。适合通过局域网、隧道或反向代理访问网页版。')
+                        $t('由部署网页的服务器连接账号地址；127.0.0.1 和局域网 IP 均从服务器视角解释。需要部署端启用 WebSocket 中继。')
                     }}</span>
                 </div>
                 <label class="ss-switch">
                     <input
-                        id="opt-dev-follow-page-host"
-                        v-model="settingsStore.sysConfig.follow_page_host"
+                        id="opt-dev-connect-via-server"
+                        v-model="settingsStore.sysConfig.connect_via_server"
                         type="checkbox"
-                        name="follow_page_host"
+                        name="connect_via_server"
                         @change="save">
                     <div>
                         <div />
