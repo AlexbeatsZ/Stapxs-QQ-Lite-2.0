@@ -146,7 +146,7 @@ html {
 .chat-pan > div.more > div:first-child {
     padding-bottom: 20px;
 }
-.chat-pan > div.more > div:first-child > div {
+.chat-pan > div.more > div:first-child > div:not(.img-pan) {
     border-radius: 999px;
 }
 .chat-pan > div.more > div:nth-child(2) {

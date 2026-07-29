@@ -514,7 +514,7 @@
             </div>
         </Teleport>
         <!-- 群 / 好友信息弹窗 -->
-        <Transition>
+        <Transition name="chat-info-float" :duration="{ enter: 300, leave: 200 }">
             <Info ref="infoRef" :chat="chat" :tags="tags"
                 @close="openChatInfoPan" />
         </Transition>

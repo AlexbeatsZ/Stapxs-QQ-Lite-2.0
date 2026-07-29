@@ -1215,10 +1215,6 @@ onUnmounted(() => {
     overflow: auto;
 }
 
-.file-manager-small {
-    display: none;
-}
-
 .music-player-float-enter-active,
 .music-player-float-leave-active {
     transition: opacity 0.2s ease, transform 0.2s ease;
@@ -1260,15 +1256,11 @@ onUnmounted(() => {
     .music-entry {
         display: none;
     }
-    .file-manager-small {
-        display: flex !important;
-        margin-bottom: 10px !important;
-    }
 }
 
 @keyframes panelSlideUp {
     from {
-        transform: translate(-50%, -50%) scale(1.1);
+        transform: translate(-50%, -20%) scale(0.95);
         opacity: 0;
     }
 
@@ -1285,7 +1277,7 @@ onUnmounted(() => {
     }
 
     to {
-        transform: translate(-50%, -50%) scale(1.1);
+        transform: translate(-50%, -5%) scale(0.98);
         opacity: 0;
     }
 }
