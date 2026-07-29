@@ -590,7 +590,7 @@ export async function loadMobile() {
             // 调整输入框高度
             const sendMore = document.getElementById('send-more')
             if (sendMore && keyboardHeight > window.innerHeight / 3) {
-                sendMore.style.paddingBottom = '10px'
+                sendMore.style.paddingBottom = '105px'
             }
 
             const safeArea = await backend.call('SafeArea', 'getSafeArea', true)
