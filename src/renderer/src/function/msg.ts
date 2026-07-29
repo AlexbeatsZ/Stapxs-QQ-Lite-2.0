@@ -50,6 +50,7 @@ import {
     UserFriendElem,
     UserGroupElem,
     MsgItemElem,
+    type Session,
 } from './elements/information'
 import { NotifyInfo } from './elements/system'
 import { Notify } from './notify'
@@ -67,6 +68,12 @@ import { useStickerStore } from '@renderer/state/sticker'
 import { useUIStore } from '@renderer/state/ui'
 import { useSettingsStore } from '@renderer/state/settings'
 import { useQzoneStore } from '@renderer/state/qzone'
+import {
+    getSessionId,
+    getMissingGroupPreviewSessions,
+    mergeEarlySessionContacts,
+    resolveIncomingSession,
+} from './utils/sessionUtil'
 
 const popInfo = new PopInfo()
 // eslint-disable-next-line
@@ -102,6 +109,70 @@ export function clearLoginWaveTimer() {
         loginWaveTimer = null
     }
 }
+
+const groupPreviewHydrator = (() => {
+    const intervalMs = 150
+    let queue: Session[] = []
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    function stop() {
+        if (timer) clearTimeout(timer)
+        timer = undefined
+    }
+
+    function tick() {
+        timer = undefined
+        const contactStore = useContactStore()
+        const session = queue.shift()
+        if (session) {
+            const sessionId = getSessionId(session)
+            if (
+                Number.isFinite(sessionId) &&
+                sessionId > 0 &&
+                !session.time &&
+                !session.raw_msg &&
+                !contactStore.baseOnMsgList.has(sessionId)
+            ) {
+                // userList 与 baseOnMsgList 共享同一个会话对象；历史响应会原地补全预览。
+                contactStore.baseOnMsgList.set(sessionId, session)
+                updateLastestHistory(session)
+            }
+        }
+
+        if (queue.length > 0) {
+            timer = setTimeout(tick, intervalMs)
+        }
+    }
+
+    function start() {
+        if (!timer && queue.length > 0) tick()
+    }
+
+    return {
+        scheduleMissingSessions() {
+            const contactStore = useContactStore()
+            const settingsStore = useSettingsStore()
+            if (settingsStore.sysConfig.session_display_mode !== 'all') return
+
+            const queuedIds = new Set(queue.map((item) => getSessionId(item)))
+            getMissingGroupPreviewSessions(
+                contactStore.userList,
+                contactStore.baseOnMsgList,
+            ).forEach((item) => {
+                const sessionId = getSessionId(item)
+                if (!queuedIds.has(sessionId)) {
+                    queue.push(item)
+                    queuedIds.add(sessionId)
+                }
+            })
+            start()
+        },
+        reset() {
+            stop()
+            queue = []
+        },
+    }
+})()
 
 function resolveContactPinyinName(item: UserFriendElem | UserGroupElem) {
     if ((item as UserFriendElem).group_id) {
@@ -871,9 +942,10 @@ const msgFunctions = {
                     )
                     // 更新消息列表
                     const onmsg = contactStore.baseOnMsgList.get(Number(id))
-                    if (onmsg) {
+                    if (onmsg && list[0]) {
                         Object.assign(onmsg, formatMessageData(list[0], Boolean(onmsg.group_id)))
                         contactStore.baseOnMsgList.set(id, onmsg)
+                        updateBaseOnMsgList()
                     }
                 }
             } catch (e) {
@@ -1307,6 +1379,8 @@ const msgFunctions = {
                 }
             })
         }
+        // “显示全部会话”会包含 recent_contact 之外的群；限流补取这些群的最后一条历史。
+        groupPreviewHydrator.scheduleMissingSessions()
     },
 
     /**
@@ -1529,8 +1603,16 @@ function saveUser(msg: { [key: string]: any }, type: string) {
             hydrateContactPinyinLater(list)
         }
         sortContactListByPinyin(list)
+        // 实时消息可能比联系人列表更早到达；用真实联系人资料接管临时会话，保留预览状态。
+        const didMergeEarlySessions = mergeEarlySessionContacts(
+            list,
+            contactStore.baseOnMsgList,
+        )
         contactStore.userList = contactStore.userList.concat(list)
-        if (settingsStore.sysConfig.session_display_mode === 'all') {
+        if (
+            settingsStore.sysConfig.session_display_mode === 'all' ||
+            didMergeEarlySessions
+        ) {
             updateBaseOnMsgList()
         }
         // 刷新置顶列表
@@ -1691,7 +1773,7 @@ async function saveMsg(msg: any, append = undefined as undefined | string) {
         chatStore.messageList.forEach((item) => {
             sendMsgAppendInfo(item)
         })
-        // 将消息列表的最后一条 raw_message 保存到用户列表中
+        // 将最新消息同步到会话列表；通过会话 Map 更新以触发 shallowRef 列表刷新。
         const lastMsg =
             chatStore.messageList[chatStore.messageList.length - 1]
         if (lastMsg) {
@@ -1701,14 +1783,17 @@ async function saveMsg(msg: any, append = undefined as undefined | string) {
                     item.user_id == chatStore.chatInfo.show.id
                 )
             })
-            if (user) {
-                if (chatStore.chatInfo.show.type == 'group') {
-                    user.raw_msg =
-                        lastMsg.sender.nickname + ': ' + getMsgRawTxt(lastMsg)
-                } else {
-                    user.raw_msg = getMsgRawTxt(lastMsg)
-                }
-                user.time = getViewTime(Number(lastMsg.time))
+            const sessionId = Number(chatStore.chatInfo.show.id)
+            const session = contactStore.baseOnMsgList.get(sessionId) ?? user
+            if (session) {
+                const preview = formatMessageData(
+                    lastMsg,
+                    chatStore.chatInfo.show.type == 'group',
+                )
+                if (user) Object.assign(user, preview)
+                Object.assign(session, preview)
+                contactStore.baseOnMsgList.set(sessionId, session)
+                updateBaseOnMsgList()
             }
         }
 
@@ -2204,9 +2289,12 @@ function newMsg(_: string, data: any) {
                     group_name: '',
                 } as UserFriendElem & UserGroupElem
             } else {
-                session = contactStore.userList.find((item) => {
-                    return item.user_id === id || item.group_id === id
-                })
+                session = resolveIncomingSession(
+                    contactStore.userList,
+                    sessionId,
+                    isGroupMessage,
+                    data.sender?.nickname,
+                )
             }
         }
         if (session) {
@@ -2228,6 +2316,7 @@ function newMsg(_: string, data: any) {
                 if (isImportant) { session.highlight = $t('[特別关心]') }
             }
             contactStore.baseOnMsgList.set(sessionId, session)
+            updateBaseOnMsgList()
         }
 
         // 通知判定 ============================================
@@ -2332,6 +2421,7 @@ export function resetRimtime(resetAll = false) {
     firstHeartbeatTime = -1
     heartbeatTime = -1
     clearMetaEventWatchdog()
+    groupPreviewHydrator.reset()
     if (resetAll) {
         // Reset auth store
         const authStore = useAuthStore()
