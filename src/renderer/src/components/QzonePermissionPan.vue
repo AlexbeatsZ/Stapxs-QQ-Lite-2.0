@@ -1,6 +1,9 @@
 <template>
     <div class="qzone-permission-pan">
-        <select v-model="permission.mode" class="qzone-permission-select">
+        <label :for="permissionModeInputId" class="sr-only">{{ $t('说说可见范围') }}</label>
+        <select :id="permissionModeInputId"
+            v-model="permission.mode"
+            class="qzone-permission-select">
             <option value="public">
                 {{ $t('所有人可见') }}
             </option>
@@ -56,6 +59,7 @@
     const $t = i18n.global.t
     const searchText = ref('')
     const selectedMap = reactive(new Set<number>())
+    const permissionModeInputId = `qzone-permission-mode-${Math.random().toString(36).slice(2, 9)}`
     const showList = computed(() => {
         return ['allow_some', 'deny_some'].includes(permission.value.mode)
     })

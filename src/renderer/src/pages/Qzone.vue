@@ -1,5 +1,6 @@
 <template>
     <div class="qzone-view" @scroll.passive="handleFeedScroll">
+        <label for="qzone-reply-choice-pic" class="sr-only">{{ $t('选择评论图片') }}</label>
         <input id="qzone-reply-choice-pic"
             style="display: none"
             type="file"
@@ -25,9 +26,12 @@
                 </div>
             </div>
             <div class="create-qzone">
-                <textarea v-model="createQzone.content"
+                <label for="create-qzone-content" class="sr-only">{{ $t('分享新鲜事内容') }}</label>
+                <textarea id="create-qzone-content"
+                    v-model="createQzone.content"
                     type="text"
                     :placeholder="$t('分享新鲜事...')" />
+                <label for="create-qzone-choice-pic" class="sr-only">{{ $t('选择说说图片') }}</label>
                 <input id="create-qzone-choice-pic"
                     style="display: none"
                     type="file"
@@ -146,7 +150,9 @@
                 </div>
                 <div class="qzone-feed-reply">
                     <img :src="`https://q1.qlogo.cn/g?b=qq&s=0&nk=${authStore.loginInfo.uin}`">
-                    <input v-model="getReplyDraft(item.id).content"
+                    <label :for="`qzone-reply-input-${item.id}`" class="sr-only">{{ $t('评论输入框') }}</label>
+                    <input :id="`qzone-reply-input-${item.id}`"
+                        v-model="getReplyDraft(item.id).content"
                         type="text"
                         class="ss-input"
                         :placeholder="$t('说点什么？')">
@@ -656,7 +662,7 @@
             text: extractTextFromHtml(feed.html ?? ''),
             avatar: `https://q1.qlogo.cn/g?b=qq&s=0&nk=${feed.uin}`,
             images: extractImagesFromHtml(feed.html ?? ''),
-            timeText: formatFeedTime(Number(feed.time) ?? 0),
+            timeText: formatFeedTime(Number(feed.time ?? 0)),
             footInfo: getFootInfo(feed.html ?? ''),
             replies: getCommentsDetailed(feed.html ?? '')
         }
@@ -671,12 +677,14 @@
         const feedData = div.querySelector('[name="feed_data"]')
         const feedNickName = div.querySelector('.f-single-content .nickname.name')
         const likeBtn = div.querySelector('.qz_like_btn_v3') ||
-                    div.querySelector('[data-islike]');
+            div.querySelector('[data-islike]')
         // 浏览量
-        const visitor = Number(visitorEl?.textContent.replace('浏览', '').replace('次', '')) ?? 0
+        const visitorText = visitorEl?.textContent ?? ''
+        const visitor = Number(visitorText.replace('浏览', '').replace('次', '')) || 0
         // 喜欢信息
         const isLiked = likeBtn?.getAttribute('data-islike') == '1'
-        const likeCount = Number(div.querySelector('[data-likecnt]')?.getAttribute('data-likecnt')) ?? 0
+        const likeCountText = div.querySelector('[data-likecnt]')?.getAttribute('data-likecnt') ?? '0'
+        const likeCount = Number(likeCountText) || 0
         const likeUsers = [] as { nickname: string, id: number }[]
         div.querySelectorAll('.user-list .item').forEach(el => {
             likeUsers.push({

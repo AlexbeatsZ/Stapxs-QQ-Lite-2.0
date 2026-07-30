@@ -1,8 +1,10 @@
 <template>
     <div class="theme-color-picker-pan">
         <div class="theme-color-preview">
+            <label :for="colorHexInputId" class="sr-only">{{ $t('主题颜色值') }}</label>
             <div class="theme-color-preview-chip" :style="{ background: colorHex }" />
-            <input v-model="inputValue"
+            <input :id="colorHexInputId"
+                v-model="inputValue"
                 class="ss-input theme-color-preview-input"
                 type="text"
                 inputmode="text"
@@ -40,7 +42,9 @@
         </div>
         <div class="ss-range theme-color-hue-range"
             :style="{ '--range-precent': `${(hue / 360) * 100}%` }">
-            <input v-model="hue"
+            <label :for="colorHueInputId" class="sr-only">{{ $t('主题色相') }}</label>
+            <input :id="colorHueInputId"
+                v-model="hue"
                 class="theme-color-hue"
                 type="range"
                 min="0"
@@ -57,6 +61,7 @@
 
 <script setup lang="ts">
     import { computed, ref, watch } from 'vue'
+    import { i18n } from '@renderer/main'
 
     defineOptions({ name: 'ThemeColorPickerPan' })
 
@@ -73,12 +78,15 @@
         'update:modelValue': [value: string]
     }>()
 
+    const $t = i18n.global.t
     const boardRef = ref<HTMLDivElement | null>(null)
     const hue = ref(0)
     const saturation = ref(100)
     const value = ref(100)
     const inputValue = ref('#FFFFFF')
     const isSyncing = ref(false)
+    const colorHexInputId = `theme-color-preview-input-${Math.random().toString(36).slice(2, 9)}`
+    const colorHueInputId = `theme-color-hue-input-${Math.random().toString(36).slice(2, 9)}`
 
     const colorHex = computed(() => {
         return hsvToHex(hue.value, saturation.value, value.value)
