@@ -842,8 +842,8 @@ onMounted(() => {
         tags.showFileManager = val
     })
 
-    // 页面加载完成后
-    window.onload = async () => {
+    // 页面加载与初始化
+    const initApp = async () => {
         await backend.init() // Desktop：初始化客户端功能
 
         if(import.meta.env.DEV) {
@@ -1098,6 +1098,10 @@ onMounted(() => {
             backend.call(undefined, 'win:setTitle', false, title)
         }
     }
+
+    // 立即执行应用初始化，无需等待第三方外部资源（高德地图等）导致的 window.onload 阻塞
+    initApp()
+
     // 页面关闭前
     window.onbeforeunload = () => {
         logger.system('开发者阁下—— 唔，阁下离开的太匆忙了！让我来帮开发者阁下收拾下东西吧。')

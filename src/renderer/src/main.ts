@@ -22,11 +22,15 @@ import { initAMapApiLoader } from '@vuemap/vue-amap'
 import { getPortableFileLang } from './function/utils/systemUtil'
 import { preloadPinyin } from './function/utils/pinyin'
 
-// 初始化高德地图 API
-initAMapApiLoader({
-    key: import.meta.env.VITE_APP_AMAP_KEY,
-    securityJsCode: import.meta.env.VITE_APP_AMAP_SECRET,
-})
+// 延迟初始化高德地图 API，避免阻塞首屏关键渲染
+if (typeof window !== 'undefined') {
+    setTimeout(() => {
+        initAMapApiLoader({
+            key: import.meta.env.VITE_APP_AMAP_KEY,
+            securityJsCode: import.meta.env.VITE_APP_AMAP_SECRET,
+        })
+    }, 1500)
+}
 
 /* eslint-disable no-console */
 const zh = getPortableFileLang('zh-CN')
