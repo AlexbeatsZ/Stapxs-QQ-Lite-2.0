@@ -1162,62 +1162,12 @@ const msgFunctions = {
     /**
      * 下载文件（聊天中）
      */
-    downloadFile: (_: string, msg: { [key: string]: any }, echoList: string[]) => {
-        const data = getMsgData('file_download', msg, msgPath.file_download)?.[0]
-        const url = data?.file_url
-        if (!url) {
-            popInfo.add(
-                PopType.ERR,
-                app.config.globalProperties.$t('获取文件下载地址失败'),
-            )
-            return
-        }
-
-        const fileName = decodeURIComponent(atob(echoList[2]))
-        const fileSize = data.file_size || 0
-
-        // 使用文件传输管理器下载
-        addDownloadTask({
-            fileName,
-            fileSize,
-            filePath: '',
-            url,
-            onError: (error) => popInfo.add(
-                PopType.ERR,
-                app.config.globalProperties.$t('文件下载失败') + '：' + error,
-            ),
-        })
-    },
+    downloadFile: startFileDownload,
 
     /**
      * 下载文件（群文件）
      */
-    downloadGroupFile: (_: string, msg: { [key: string]: any }, echoList: string[]) => {
-        const data = getMsgData('file_download', msg, msgPath.file_download)?.[0]
-        const url = data?.file_url
-        if (!url) {
-            popInfo.add(
-                PopType.ERR,
-                app.config.globalProperties.$t('获取文件下载地址失败'),
-            )
-            return
-        }
-
-        const fileName = decodeURIComponent(atob(echoList[2]))
-        const fileSize = data.file_size || 0
-
-        // 使用文件传输管理器下载
-        addDownloadTask({
-            fileName,
-            fileSize,
-            filePath: '',
-            url,
-            onError: (error) => popInfo.add(
-                PopType.ERR,
-                app.config.globalProperties.$t('文件下载失败') + '：' + error,
-            ),
-        })
-    },
+    downloadGroupFile: startFileDownload,
 
     /**
      * 文件预览下载
@@ -1545,6 +1495,34 @@ const msgFunctions = {
         msg: { [key: string]: any },
         echoList?: string[],
     ) => void
+}
+
+function startFileDownload(
+    _: string,
+    msg: { [key: string]: any },
+    echoList: string[],
+) {
+    const data = getMsgData('file_download', msg, msgPath.file_download)?.[0]
+    const url = data?.file_url
+    if (!url) {
+        popInfo.add(
+            PopType.ERR,
+            app.config.globalProperties.$t('获取文件下载地址失败'),
+        )
+        return
+    }
+
+    const fileName = decodeURIComponent(atob(echoList[2]))
+    addDownloadTask({
+        fileName,
+        fileSize: data.file_size || 0,
+        filePath: '',
+        url,
+        onError: (error) => popInfo.add(
+            PopType.ERR,
+            app.config.globalProperties.$t('文件下载失败') + '：' + error,
+        ),
+    })
 }
 
 const handlers: Record<string, (payload: any, metaArgs?: string[]) => void> = {
