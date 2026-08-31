@@ -26,6 +26,8 @@ OneBot-specific upload extensions.
 
 - Electron and Tauri events carry a transfer task ID. Progress, completion,
   cancellation, and failure events must be consumed only by the matching task.
+- Tauri download commands start only after every asynchronous event listener
+  reports that it is ready; terminal events must not race listener setup.
 - Native backends reduce remote file names to a base name before joining them
   to the user-selected download directory.
 - Electron associates redirects through the complete URL chain, because the

@@ -11,6 +11,10 @@ const logger = new Logger()
 const popInfo = new PopInfo()
 
 type CapacitorPluginRegistry = Record<string, Record<string, (...args: any[]) => any>>
+type BackendListenerHandle = {
+    ready: Promise<boolean>
+    remove: () => void
+}
 
 export const backend = {
     type: 'web' as 'electron' | 'tauri' | 'capacitor' | 'web',
@@ -268,39 +272,53 @@ export const backend = {
         type: string | undefined,
         name: string,
         callBack: (...args: any[]) => void,
-    ): () => void {
+    ): BackendListenerHandle {
         if(this.listener) {
             if(this.type === 'electron') {
                 this.listener(name, callBack)
-                return () => this.removeListener(type, name, callBack)
+                return {
+                    ready: Promise.resolve(true),
+                    remove: () => this.removeListener(type, name, callBack),
+                }
             } else if(this.type === 'tauri') {
                 let active = true
                 let unlisten: (() => void) | undefined
                 const listenResult = this.listener(name, callBack)
-                void Promise.resolve(listenResult)
+                const ready = Promise.resolve(listenResult)
                     .then((callback) => {
-                        if (typeof callback !== 'function') return
+                        if (typeof callback !== 'function') return false
                         if (active) {
                             unlisten = callback
                         } else {
                             callback()
                         }
+                        return true
                     })
                     .catch((error) => {
                         logger.error(error as Error, `添加后端监听失败：${name}(${type})`)
+                        return false
                     })
-                return () => {
-                    active = false
-                    unlisten?.()
-                    unlisten = undefined
+                return {
+                    ready,
+                    remove: () => {
+                        active = false
+                        unlisten?.()
+                        unlisten = undefined
+                    },
                 }
             } else if(this.isMobile() && type) {
                 this.listener(type, name, callBack)
-                return () => undefined
+                return {
+                    ready: Promise.resolve(true),
+                    remove: () => undefined,
+                }
             }
         }
         logger.error(null, `添加后端监听失败：${name}(${type})`)
-        return () => undefined
+        return {
+            ready: Promise.resolve(false),
+            remove: () => undefined,
+        }
     },
 
     /**

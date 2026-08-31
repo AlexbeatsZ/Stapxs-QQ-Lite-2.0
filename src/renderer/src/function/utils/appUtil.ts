@@ -1,5 +1,6 @@
 import app from '@renderer/main'
 import FileDownloader from 'js-file-downloader'
+import { v4 as uuid } from 'uuid'
 import option from '@renderer/function/option'
 import semver from 'semver'
 import appInfo from '../../../../../package.json'
@@ -315,11 +316,20 @@ export function downloadFile(
             cleanup: () => undefined,
         }
     } else {
+        const nativeTaskId = taskId ?? uuid()
         const matchesTask = (data: any) => {
-            if (!taskId) return true
             // 新的 Electron/Tauri 后端必须严格隔离并发任务。
             // Capacitor 插件尚未携带 taskId，暂保留旧协议兼容。
-            return backend.type === 'capacitor'? !data?.taskId || data.taskId === taskId: data?.taskId === taskId
+            return backend.type === 'capacitor'? !data?.taskId || data.taskId === nativeTaskId: data?.taskId === nativeTaskId
+        }
+        let disposed = false
+        let started = false
+        let cancelRequested = false
+        let listenerHandles: ReturnType<typeof backend.addListener>[] = []
+        const cleanup = () => {
+            if (disposed) return
+            disposed = true
+            listenerHandles.forEach((handle) => handle.remove())
         }
         // 创建命名回调函数以便后续移除
         const processCallback = (event: any, data: any) => {
@@ -328,36 +338,50 @@ export function downloadFile(
         }
         const cancelCallback = (event: any, data: any) => {
             const payload = data || event.payload
-            if (matchesTask(payload)) oncancel(payload)
+            if (!matchesTask(payload)) return
+            cleanup()
+            oncancel(payload)
         }
         const completeCallback = (event: any, data: any) => {
             const payload = data || event.payload
-            if (matchesTask(payload)) oncomplete?.('completed')
+            if (!matchesTask(payload)) return
+            cleanup()
+            oncomplete?.('completed')
         }
         const errorCallback = (event: any, data: any) => {
             const payload = data || event.payload
             if (!matchesTask(payload)) return
             const message = payload?.error || payload?.message || payload || '下载失败'
+            cleanup()
             onerror?.(new Error(String(message)))
         }
-        const removeListeners = [
+        listenerHandles = [
             backend.addListener(undefined, 'sys:downloadBack', processCallback),
             backend.addListener(undefined, 'sys:downloadCancel', cancelCallback),
             backend.addListener(undefined, 'sys:downloadDone', completeCallback),
             backend.addListener(undefined, 'sys:downloadError', errorCallback),
         ]
-        backend.call(undefined, 'sys:download', false, {
-            downloadPath: url,
-            fileName: name,
-            taskId,
+        void Promise.all(listenerHandles.map((handle) => handle.ready)).then((ready) => {
+            if (disposed || cancelRequested) return
+            if (ready.some((value) => !value)) {
+                cleanup()
+                onerror?.(new Error('下载监听器初始化失败'))
+                return
+            }
+            started = true
+            void backend.call(undefined, 'sys:download', false, {
+                downloadPath: url,
+                fileName: name,
+                taskId: nativeTaskId,
+            })
         })
-        const cleanup = () => {
-            removeListeners.forEach((removeListener) => removeListener())
-        }
         return {
             cancel: () => {
-                if ((backend.type === 'electron' || backend.type === 'tauri') && taskId) {
-                    backend.call(undefined, 'sys:cancelDownload', false, { taskId })
+                cancelRequested = true
+                if ((backend.type === 'electron' || backend.type === 'tauri') && started) {
+                    void backend.call(undefined, 'sys:cancelDownload', false, {
+                        taskId: nativeTaskId,
+                    })
                 }
             },
             cleanup,
