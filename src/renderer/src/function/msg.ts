@@ -608,6 +608,55 @@ const noticeFunctions = {
     },
 } as { [key: string]: (name: string, msg: { [key: string]: any }) => void }
 
+function handleChatHistoryResponse(
+    msg: { [key: string]: any },
+    echoList?: string[],
+    appendToTop = false,
+) {
+    const uiStore = useUIStore()
+    const chatStore = useChatStore()
+    const requestGeneration = getHistoryGeneration(echoList)
+    const isActiveRequest = () => requestGeneration === undefined ||
+        historyRequestTracker.isActive(requestGeneration, chatStore.chatInfo.show)
+
+    if (!isActiveRequest()) return
+    if (msg.data === null) {
+        new PopInfo().add(
+            PopType.ERR,
+            app.config.globalProperties.$t('获取历史记录失败'),
+        )
+        uiStore.loadHistoryFail = true
+        if (appendToTop) {
+            uiStore.historyBeforeTime = undefined
+            uiStore.nowGetHistory = false
+        }
+        return
+    }
+
+    if (!appendToTop) {
+        // 无论是否有本地预填充，都以网络数据替换（保证最新消息不遗漏）
+        saveMsg(msg, undefined, requestGeneration)
+        return
+    }
+
+    const pan = document.getElementById('msgPan')
+    if (!pan) return
+    const oldScrollHeight = pan.scrollHeight
+    saveMsg(msg, 'top', requestGeneration).then(() => {
+        if (!isActiveRequest()) return
+        nextTick(() => {
+            setTimeout(() => {
+                if (!isActiveRequest()) return
+                logger.debug(`滚动前高度：${oldScrollHeight}，当前高度：${pan.scrollHeight}，滚动位置：${pan.scrollHeight - oldScrollHeight}`)
+                pan.style.scrollBehavior = 'unset'
+                // 纠正滚动位置
+                pan.scrollTop = pan.scrollHeight - oldScrollHeight
+                pan.style.scrollBehavior = 'smooth'
+            }, 200);
+        })
+    })
+}
+
 const msgFunctions = {
     /**
      * 修改群成员信息回调
@@ -858,29 +907,8 @@ const msgFunctions = {
     /**
      * 保存聊天记录
      */
-    getChatHistoryFist: (
-        _: string,
-        msg: { [key: string]: any },
-        echoList?: string[],
-    ) => {
-        const uiStore = useUIStore()
-        const chatStore = useChatStore()
-        const requestGeneration = getHistoryGeneration(echoList)
-        if (requestGeneration !== undefined && !historyRequestTracker.isActive(
-            requestGeneration,
-            chatStore.chatInfo.show,
-        )) return
-
-        if (msg.data === null) {
-            new PopInfo().add(
-                PopType.ERR,
-                app.config.globalProperties.$t('获取历史记录失败'),
-            )
-            uiStore.loadHistoryFail = true
-            return
-        }
-        // 无论是否有本地预填充，都以网络数据替换（保证最新消息不遗漏）
-        saveMsg(msg, undefined, requestGeneration)
+    getChatHistoryFist: (_: string, msg: { [key: string]: any }, echoList?: string[]) => {
+        handleChatHistoryResponse(msg, echoList)
     },
     getChatHistoryGapFill: (
         _: string,
@@ -919,52 +947,8 @@ const msgFunctions = {
             })
             .catch(() => {})
     },
-    getChatHistory: (
-        _: string,
-        msg: { [key: string]: any },
-        echoList?: string[],
-    ) => {
-        const uiStore = useUIStore()
-        const chatStore = useChatStore()
-        const requestGeneration = getHistoryGeneration(echoList)
-        if (requestGeneration !== undefined && !historyRequestTracker.isActive(
-            requestGeneration,
-            chatStore.chatInfo.show,
-        )) return
-
-        if (msg.data === null) {
-            new PopInfo().add(
-                PopType.ERR,
-                app.config.globalProperties.$t('获取历史记录失败'),
-            )
-            uiStore.loadHistoryFail = true
-            uiStore.historyBeforeTime = undefined
-            uiStore.nowGetHistory = false
-            return
-        }
-        const pan = document.getElementById('msgPan')
-        if (pan) {
-            const oldScrollHeight = pan.scrollHeight
-            saveMsg(msg, 'top', requestGeneration).then(() => {
-                if (requestGeneration !== undefined && !historyRequestTracker.isActive(
-                    requestGeneration,
-                    chatStore.chatInfo.show,
-                )) return
-                nextTick(() => {
-                    setTimeout(() => {
-                        if (requestGeneration !== undefined && !historyRequestTracker.isActive(
-                            requestGeneration,
-                            chatStore.chatInfo.show,
-                        )) return
-                        logger.debug(`滚动前高度：${oldScrollHeight}，当前高度：${pan.scrollHeight}，滚动位置：${pan.scrollHeight - oldScrollHeight}`)
-                        pan.style.scrollBehavior = 'unset'
-                        // 纠正滚动位置
-                        pan.scrollTop = pan.scrollHeight - oldScrollHeight
-                        pan.style.scrollBehavior = 'smooth'
-                    }, 200);
-                })
-            })
-        }
+    getChatHistory: (_: string, msg: { [key: string]: any }, echoList?: string[]) => {
+        handleChatHistoryResponse(msg, echoList, true)
     },
 
     getChatHistoryOnMsg: (
