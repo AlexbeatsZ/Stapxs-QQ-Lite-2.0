@@ -78,6 +78,7 @@ export async function uploadFileStream(
             stream_id: options.streamId,
             is_complete: true,
         }, options.completeTimeoutMs)
+        throwIfAborted(signal)
         const completeError = getOneBotResponseError(completeResponse)
         if (completeError) throw new Error(completeError)
 

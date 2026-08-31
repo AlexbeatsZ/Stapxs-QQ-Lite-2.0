@@ -106,3 +106,36 @@ test('stops before sending the next chunk after cancellation', async () => {
     assert.deepEqual(calls.map((params) => params.chunk_index), [0, undefined])
     assert.equal(calls.at(-1).reset, true)
 })
+
+test('rejects cancellation while waiting for stream completion', async () => {
+    const controller = new AbortController()
+    const calls = []
+    let finishCompletion
+    const completion = new Promise((resolve) => {
+        finishCompletion = resolve
+    })
+    const upload = uploadFileStream(
+        new Blob(['data']),
+        options,
+        async (_, params) => {
+            calls.push(params)
+            if (params.is_complete) return completion
+            if (params.reset) return { status: 'ok', retcode: 0 }
+            return { status: 'ok', retcode: 0 }
+        },
+        () => undefined,
+        controller.signal,
+    )
+
+    await new Promise((resolve) => setImmediate(resolve))
+    controller.abort()
+    finishCompletion({
+        status: 'ok',
+        retcode: 0,
+        data: { file_path: 'C:/temp/sample.bin' },
+    })
+
+    await assert.rejects(upload, { name: 'AbortError' })
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.equal(calls.at(-1).reset, true)
+})
