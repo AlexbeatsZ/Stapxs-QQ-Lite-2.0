@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
     getOneBotResponseError,
+    isActiveTransferStatus,
     uploadFileStream,
 } from '../src/renderer/src/function/utils/fileTransferUtil.ts'
 
@@ -15,6 +16,15 @@ const options = {
     chunkTimeoutMs: 1_000,
     completeTimeoutMs: 2_000,
 }
+
+test('keeps every in-progress transfer state visible', () => {
+    for (const status of ['pending', 'downloading', 'uploading', 'finalizing']) {
+        assert.equal(isActiveTransferStatus(status), true)
+    }
+    for (const status of ['completed', 'delegated', 'failed', 'cancelled']) {
+        assert.equal(isActiveTransferStatus(status), false)
+    }
+})
 
 test('uploads a blob as ordered bounded chunks', async () => {
     const chunks = []
