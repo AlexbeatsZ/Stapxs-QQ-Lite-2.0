@@ -56,7 +56,12 @@ import { NotifyInfo } from './elements/system'
 import { Notify } from './notify'
 import { backend } from '@renderer/runtime/backend'
 import { dbRevokeMessage, saveMessagesWithSideEffects } from './utils/localHistoryUtil'
-import { addDownloadTask, completeUploadTask } from '@renderer/components/FileManager.vue'
+import {
+    addDownloadTask,
+    completeUploadTask,
+    failUploadTask,
+} from '@renderer/components/FileManager.vue'
+import { getOneBotResponseError } from './utils/fileTransferUtil'
 import { refreshFavicon } from './favicon'
 import { Img } from './model/img'
 import { ensurePinyinLoaded, getPinyin, isPinyinReady } from './utils/pinyin'
@@ -998,9 +1003,20 @@ const msgFunctions = {
         msg: { [key: string]: any },
         echoList: string[],
     ) => {
-        // 标记上传任务完成
+        let taskId: string | undefined
         if (echoList[1] === 'task' && echoList[2] && echoList[3]) {
-            const taskId = echoList[1] + '_' + echoList[2] + '_' + echoList[3]
+            taskId = echoList[1] + '_' + echoList[2] + '_' + echoList[3]
+        }
+        const error = getOneBotResponseError(msg)
+        if (error) {
+            if (taskId) failUploadTask(taskId, error)
+            popInfo.add(
+                PopType.ERR,
+                app.config.globalProperties.$t('文件上传失败') + '：' + error,
+            )
+            return
+        }
+        if (taskId) {
             completeUploadTask(taskId)
         }
         const newEchoList = ['sendMsgBack', ...echoList.slice(4)]
@@ -1147,8 +1163,15 @@ const msgFunctions = {
      * 下载文件（聊天中）
      */
     downloadFile: (_: string, msg: { [key: string]: any }, echoList: string[]) => {
-        const data = getMsgData('file_download', msg, msgPath.file_download)[0]
-        const url = data.file_url
+        const data = getMsgData('file_download', msg, msgPath.file_download)?.[0]
+        const url = data?.file_url
+        if (!url) {
+            popInfo.add(
+                PopType.ERR,
+                app.config.globalProperties.$t('获取文件下载地址失败'),
+            )
+            return
+        }
 
         const fileName = decodeURIComponent(atob(echoList[2]))
         const fileSize = data.file_size || 0
@@ -1158,7 +1181,11 @@ const msgFunctions = {
             fileName,
             fileSize,
             filePath: '',
-            url
+            url,
+            onError: (error) => popInfo.add(
+                PopType.ERR,
+                app.config.globalProperties.$t('文件下载失败') + '：' + error,
+            ),
         })
     },
 
@@ -1166,8 +1193,15 @@ const msgFunctions = {
      * 下载文件（群文件）
      */
     downloadGroupFile: (_: string, msg: { [key: string]: any }, echoList: string[]) => {
-        const data = getMsgData('file_download', msg, msgPath.file_download)[0]
-        const url = data.file_url
+        const data = getMsgData('file_download', msg, msgPath.file_download)?.[0]
+        const url = data?.file_url
+        if (!url) {
+            popInfo.add(
+                PopType.ERR,
+                app.config.globalProperties.$t('获取文件下载地址失败'),
+            )
+            return
+        }
 
         const fileName = decodeURIComponent(atob(echoList[2]))
         const fileSize = data.file_size || 0
@@ -1177,7 +1211,11 @@ const msgFunctions = {
             fileName,
             fileSize,
             filePath: '',
-            url
+            url,
+            onError: (error) => popInfo.add(
+                PopType.ERR,
+                app.config.globalProperties.$t('文件下载失败') + '：' + error,
+            ),
         })
     },
 

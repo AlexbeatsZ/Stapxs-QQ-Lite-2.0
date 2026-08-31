@@ -27,7 +27,7 @@ export const backend = {
         plugins: CapacitorPluginRegistry,
         vConsole: VConsole
     } | undefined,
-    listener: undefined as ((event: string, ...args: any[]) => void) | undefined,
+    listener: undefined as ((event: string, ...args: any[]) => any) | undefined,
 
     isDesktop() {
         return this.type == 'electron' || this.type == 'tauri'
@@ -264,17 +264,43 @@ export const backend = {
      * @param name 事件名称
      * @param callBack 回调函数
      */
-    addListener(type: string | undefined, name: string, callBack: (...args: any[]) => void) {
+    addListener(
+        type: string | undefined,
+        name: string,
+        callBack: (...args: any[]) => void,
+    ): () => void {
         if(this.listener) {
-            if(this.isDesktop()) {
+            if(this.type === 'electron') {
                 this.listener(name, callBack)
-                return
+                return () => this.removeListener(type, name, callBack)
+            } else if(this.type === 'tauri') {
+                let active = true
+                let unlisten: (() => void) | undefined
+                const listenResult = this.listener(name, callBack)
+                void Promise.resolve(listenResult)
+                    .then((callback) => {
+                        if (typeof callback !== 'function') return
+                        if (active) {
+                            unlisten = callback
+                        } else {
+                            callback()
+                        }
+                    })
+                    .catch((error) => {
+                        logger.error(error as Error, `添加后端监听失败：${name}(${type})`)
+                    })
+                return () => {
+                    active = false
+                    unlisten?.()
+                    unlisten = undefined
+                }
             } else if(this.isMobile() && type) {
                 this.listener(type, name, callBack)
-                return
+                return () => undefined
             }
         }
         logger.error(null, `添加后端监听失败：${name}(${type})`)
+        return () => undefined
     },
 
     /**

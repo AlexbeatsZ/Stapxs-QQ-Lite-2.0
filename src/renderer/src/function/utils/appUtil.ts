@@ -253,7 +253,10 @@ export function downloadFile(
     name: string,
     onprocess: (event: ProgressEvent & { [key: string]: any }) => undefined,
     oncancel: (event: ProgressEvent & { [key: string]: any }) => undefined,
-): () => void {
+    oncomplete?: (mode: 'completed' | 'delegated') => void,
+    onerror?: (error: Error) => void,
+    taskId?: string,
+): { cancel: () => void, cleanup: () => void } {
     if (document.location.protocol == 'https:') {
         // 判断下载文件 URL 的协议
         // PS：Chrome 不会对 http 下载的文件进行协议升级
@@ -262,37 +265,102 @@ export function downloadFile(
         }
     }
     if (backend.isWeb()) {
-        try {
-            new FileDownloader({
-                url: url,
-                autoStart: true,
-                process: onprocess,
-                nameCallback: function () {
-                    return name
-                },
-            })
-        } catch (e) {
-            logger.error(e as Error, '下载文件失败')
+        const parsedUrl = new URL(url, document.location.href)
+        if (
+            ['http:', 'https:'].includes(parsedUrl.protocol) &&
+            parsedUrl.origin !== document.location.origin
+        ) {
+            // 跨域 XHR 下载既需要 CORS，又会先把整个文件缓冲进内存。
+            // 交给浏览器原生下载器可以流式落盘，也不会受应用超时影响。
+            const link = document.createElement('a')
+            link.href = url
+            link.download = name
+            link.rel = 'noopener'
+            link.target = '_blank'
+            link.style.display = 'none'
+            document.body.appendChild(link)
+            link.click()
+            setTimeout(() => link.remove(), 0)
+            oncomplete?.('delegated')
+            return {
+                cancel: () => undefined,
+                cleanup: () => link.remove(),
+            }
         }
-        return () => {} // Web 平台不需要清理
+
+        const downloader = new FileDownloader({
+            url: url,
+            autoStart: false,
+            timeout: 0,
+            process: onprocess,
+            nameCallback: function () {
+                return name
+            },
+        })
+        let cancelled = false
+        void downloader.start()
+            .then(() => oncomplete?.('completed'))
+            .catch((error) => {
+                if (cancelled) {
+                    oncancel({} as ProgressEvent)
+                } else {
+                    onerror?.(error instanceof Error? error: new Error(String(error)))
+                }
+            })
+        return {
+            cancel: () => {
+                cancelled = true
+                downloader.abort('Download cancelled')
+            },
+            cleanup: () => undefined,
+        }
     } else {
+        const matchesTask = (data: any) => {
+            if (!taskId) return true
+            // 新的 Electron/Tauri 后端必须严格隔离并发任务。
+            // Capacitor 插件尚未携带 taskId，暂保留旧协议兼容。
+            return backend.type === 'capacitor'? !data?.taskId || data.taskId === taskId: data?.taskId === taskId
+        }
         // 创建命名回调函数以便后续移除
         const processCallback = (event: any, data: any) => {
-            onprocess(data || event.payload)
+            const payload = data || event.payload
+            if (matchesTask(payload)) onprocess(payload)
         }
         const cancelCallback = (event: any, data: any) => {
-            oncancel(data || event.payload)
+            const payload = data || event.payload
+            if (matchesTask(payload)) oncancel(payload)
         }
-        backend.addListener(undefined, 'sys:downloadBack', processCallback)
-        backend.addListener(undefined, 'sys:downloadCancel', cancelCallback)
+        const completeCallback = (event: any, data: any) => {
+            const payload = data || event.payload
+            if (matchesTask(payload)) oncomplete?.('completed')
+        }
+        const errorCallback = (event: any, data: any) => {
+            const payload = data || event.payload
+            if (!matchesTask(payload)) return
+            const message = payload?.error || payload?.message || payload || '下载失败'
+            onerror?.(new Error(String(message)))
+        }
+        const removeListeners = [
+            backend.addListener(undefined, 'sys:downloadBack', processCallback),
+            backend.addListener(undefined, 'sys:downloadCancel', cancelCallback),
+            backend.addListener(undefined, 'sys:downloadDone', completeCallback),
+            backend.addListener(undefined, 'sys:downloadError', errorCallback),
+        ]
         backend.call(undefined, 'sys:download', false, {
             downloadPath: url,
             fileName: name,
+            taskId,
         })
-        // 返回清理函数
-        return () => {
-            backend.removeListener(undefined, 'sys:downloadBack', processCallback)
-            backend.removeListener(undefined, 'sys:downloadCancel', cancelCallback)
+        const cleanup = () => {
+            removeListeners.forEach((removeListener) => removeListener())
+        }
+        return {
+            cancel: () => {
+                if ((backend.type === 'electron' || backend.type === 'tauri') && taskId) {
+                    backend.call(undefined, 'sys:cancelDownload', false, { taskId })
+                }
+            },
+            cleanup,
         }
     }
 }
