@@ -68,6 +68,7 @@ import { ensurePinyinLoaded, getPinyin, isPinyinReady } from './utils/pinyin'
 import { useAuthStore } from '@renderer/state/auth'
 import { useContactStore } from '@renderer/state/contact'
 import { useChatStore } from '@renderer/state/chat'
+import { useQuotedMessagesStore } from '@renderer/state/quotedMessages'
 import { useConnectionStore } from '@renderer/state/connection'
 import { useStickerStore } from '@renderer/state/sticker'
 import { useUIStore } from '@renderer/state/ui'
@@ -1762,13 +1763,13 @@ function isMessageListForCurrentSession(list: any[]): boolean {
     return id === undefined || id == useChatStore().chatInfo.show.id
 }
 
-function applyHistoryMessageList(list: any[], append?: string): boolean {
+function applyHistoryMessageList(list: any[], append?: string, keepExisting = false): boolean {
     const authStore = useAuthStore()
     const chatStore = useChatStore()
     const uiStore = useUIStore()
     const settingsStore = useSettingsStore()
 
-    if (append === 'top' && authStore.jsonMap.message_list?.pagerType === 'full') {
+    if (append === 'top' && !keepExisting && authStore.jsonMap.message_list?.pagerType === 'full') {
         append = undefined
     }
     if (append !== undefined && list.length < 1) {
@@ -1807,11 +1808,19 @@ function updateHistorySessionPreview() {
     updateBaseOnMsgList()
 }
 
+export async function appendHistoryForQuotedMessage(msg: any, isActive: () => boolean) {
+    if (!isActive()) return
+    await saveMsg(msg, 'top', undefined, isActive, true)
+}
+
 async function saveMsg(
     msg: any,
     append = undefined as undefined | string,
     requestGeneration?: number,
+    isActive = () => true,
+    keepExisting = false,
 ) {
+    if (!isActive()) return
     const uiStore = useUIStore()
     const authStore = useAuthStore()
     const chatStore = useChatStore()
@@ -1820,7 +1829,7 @@ async function saveMsg(
         type: chatStore.chatInfo.show.type,
     }
     let list = await normalizeMessagesFromPayload(msg)
-    if (!isCurrentMessageSession(expectedSession, requestGeneration) || list === undefined) return
+    if (!isActive() || !isCurrentMessageSession(expectedSession, requestGeneration) || list === undefined) return
     if (!isMessageListForCurrentSession(list)) return
 
     const historyBeforeTime = Number(uiStore.historyBeforeTime)
@@ -1841,7 +1850,7 @@ async function saveMsg(
     }
 
     persistMessageHistory(authStore.loginInfo.uin, list)
-    if (!applyHistoryMessageList(list, append)) return
+    if (!applyHistoryMessageList(list, append, keepExisting)) return
     chatStore.messageList.forEach(item => sendMsgAppendInfo(item))
     updateHistorySessionPreview()
     if (hasHistoryBeforeTime) uiStore.historyBeforeTime = undefined
@@ -2151,6 +2160,10 @@ function revokeMsg(_: string, msg: any) {
     // 在本地 DB 中标记撤回
     const msgId = msg.message_id
     dbRevokeMessage(authStore.loginInfo.uin, String(msgId))
+    if (String(chatId) === String(chatStore.chatInfo.show.id) &&
+        msg.notice_type.includes('group') === (chatStore.chatInfo.show.type === 'group')) {
+        useQuotedMessagesStore().revoke(msgId)
+    }
 
     // 寻找消息
     let msgGet = null as { [key: string]: any } | null

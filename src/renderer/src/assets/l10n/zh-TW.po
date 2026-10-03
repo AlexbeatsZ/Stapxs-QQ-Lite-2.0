@@ -1118,3 +1118,15 @@ msgstr "由部署網頁的伺服器連線帳號位址；127.0.0.1 和區域網�
 
 msgid "服务器连接中继不可用"
 msgstr "伺服器連線中繼無法使用"
+
+msgid "正在加载引用消息……"
+msgstr ""
+
+msgid "原消息暂不可用，点击重试"
+msgstr ""
+
+msgid "消息已撤回"
+msgstr ""
+
+msgid "跳转到引用消息"
+msgstr ""

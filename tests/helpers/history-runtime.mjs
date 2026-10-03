@@ -129,6 +129,7 @@ export async function createHistoryRuntime() {
         ['src/renderer/src/function/msg.ts', 'persistMessageHistory'],
         ['src/renderer/src/function/msg.ts', 'handleChatHistoryResponse'],
         ['src/renderer/src/pages/Chat.vue', 'loadMoreHistory'],
+        ['src/renderer/src/pages/Chat.vue', 'loadLocalOlderHistory'],
         ['src/renderer/src/pages/Chat.vue', 'detectSeqGaps'],
         ['src/renderer/src/pages/Chat.vue', 'fillSeqGaps'],
     ]
