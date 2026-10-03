@@ -33,6 +33,15 @@ test('incremental quote pages use the existing ordered deduplicating merge', asy
     assert.equal(r.saved.length, 1)
 })
 
+test('quote navigation retains previously read messages when a full-page adapter returns an older window', async () => {
+    const r = createQuotedHistoryRuntime()
+    r.chat.messageList.push(message(21), message(22))
+    r.auth.jsonMap.message_list.pagerType = 'full'
+    r.runtime.response = response([message(1), message(2)])
+    await r.api.loadMoreHistory({ isActive: () => true })
+    assert.equal(r.chat.messageList.map(item => item.message_id).join(','), '1,2,21,22')
+})
+
 test('a late network response does not change the new chat or its loading state', async () => {
     const r = createQuotedHistoryRuntime()
     r.chat.messageList.push(message(21))

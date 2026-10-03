@@ -1712,10 +1712,10 @@ function saveClassInfo(
 
 export async function appendHistoryForQuotedMessage(msg: any, isActive: () => boolean) {
     if (!isActive()) return
-    await saveMsg(msg, 'top', isActive)
+    await saveMsg(msg, 'top', isActive, true)
 }
 
-async function saveMsg(msg: any, append = undefined as undefined | string, isActive = () => true) {
+async function saveMsg(msg: any, append = undefined as undefined | string, isActive = () => true, keepExisting = false) {
     if (!isActive()) return
     const uiStore = useUIStore()
     const authStore = useAuthStore()
@@ -1767,6 +1767,7 @@ async function saveMsg(msg: any, append = undefined as undefined | string, isAct
         // 如果分页不是增量的，就不使用追加
         if (
             append == 'top' &&
+            !keepExisting &&
             authStore.jsonMap.message_list?.pagerType == 'full'
         ) {
             append = undefined

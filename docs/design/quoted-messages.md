@@ -48,7 +48,9 @@ the active conversation because their source chat is unknown.
 - Paging starts from the network boundary, without launching unrelated local
   gap-fill callbacks during navigation. Normal manual mixed local/network paging
   keeps its existing behavior. Loaded pages still use the existing merge and
-  persistence pipeline.
+  persistence pipeline. Quote paging always retains existing messages, including
+  when a full-page adapter responds with an older window rather than a cumulative
+  list; normal full-page replacement outside quote navigation is unchanged.
 - Scroll compensation completes before the final jump. Quote navigation does
   not schedule the normal history callback's delayed 200ms correction, which
   could otherwise overwrite the target position after it is highlighted.
