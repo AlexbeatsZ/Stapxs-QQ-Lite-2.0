@@ -20,7 +20,12 @@ export function configFactory(outPath: string): UserConfigFnObject {
             vue(),
             vueDevTools(),
             ViteYaml(),
-            !isDesktop && VitePWA({ registerType: 'autoUpdate' }),
+            !isDesktop && VitePWA({
+                registerType: 'autoUpdate',
+                workbox: {
+                    maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
+                },
+            }),
             visualizer() as PluginOption,
         ]
 

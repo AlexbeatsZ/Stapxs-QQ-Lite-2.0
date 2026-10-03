@@ -10,6 +10,7 @@
   "scripts": {
     "capacitor:copy:before": "capacitor-sync-version",
     "typecheck": "vue-tsc --noEmit -p tsconfig.web.json",
+    "test:relay": "node --test server/websocket-relay/index.test.mjs",
     "check": "yarn lint && yarn typecheck",
     "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts,.vue --fix",
     "lint:tauri": "cargo check --manifest-path src/tauri/Cargo.toml",

@@ -5,7 +5,7 @@ export type PinYinData = {
 
 /* eslint-disable no-console */
 
-const PINYIN_SCRIPT_SRC = 'https://lib.stapxs.cn/modules/pinyin.min.js'
+const PINYIN_SCRIPT_SRC = './modules/pinyin.min.js'
 
 let pinyinLoadPromise: Promise<boolean> | null = null
 

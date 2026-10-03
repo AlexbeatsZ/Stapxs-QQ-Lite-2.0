@@ -22,12 +22,18 @@ import { backend } from '@renderer/runtime/backend'
 import { useSettingsStore } from '@renderer/state/settings'
 import { useAuthStore } from '@renderer/state/auth'
 import { useConnectionStore } from '@renderer/state/connection'
+import {
+    createServerRelayConnectMessage,
+    getServerRelayUrl,
+    parseServerRelayControlMessage,
+} from './utils/serverRelay'
 
 const logger = new Logger()
 const popInfo = new PopInfo()
 
 let retry = 0
 let forceCloseReason: string | undefined = undefined
+let relayFailureReason: string | undefined = undefined
 
 export let websocket: WebSocket | undefined = undefined
 const WS_PROTOCOL = 'ws' + '://'
@@ -188,25 +194,57 @@ export class Connector {
                 url = appendAccessToken(withWebSocketProtocol(address, true), token)
             }
 
+            const useServerRelay = settingsStore.sysConfig.connect_via_server === true
+            let relayReady = !useServerRelay
+            relayFailureReason = undefined
             if (!websocket) {
-                websocket = new WebSocket(url)
+                websocket = new WebSocket(
+                    useServerRelay ? getServerRelayUrl(window.location) : url,
+                )
             }
 
             websocket.onopen = () => {
+                if (useServerRelay) {
+                    websocket?.send(createServerRelayConnectMessage(url))
+                    return
+                }
                 login.creating = false
                 this.onopen(address, token)
             }
             websocket.onmessage = (e) => {
+                if (!relayReady) {
+                    const message = parseServerRelayControlMessage(e.data)
+                    if (message?.type === 'relay-open') {
+                        relayReady = true
+                        login.creating = false
+                        this.onopen(address, token)
+                    } else if (message?.type === 'relay-error') {
+                        relayFailureReason = message.message
+                        websocket?.close(4001, 'relay error')
+                    }
+                    return
+                }
                 this.onmessage(e.data)
             }
             websocket.onclose = (e) => {
                 login.creating = false
+                if (relayFailureReason) {
+                    const reason = relayFailureReason
+                    relayFailureReason = undefined
+                    this.onclose(4001, reason, address, token)
+                    return
+                }
                 const reason = forceCloseReason ?? e.reason
                 forceCloseReason = undefined
-                this.onclose(e.code, reason, address, token)
+                const code = useServerRelay && e.code === 1011 ? 1006 : e.code
+                this.onclose(code, reason, address, token)
             }
             websocket.onerror = (e) => {
                 login.creating = false
+                if (useServerRelay) {
+                    relayFailureReason = $t('服务器连接中继不可用')
+                    return
+                }
                 if (e instanceof ErrorEvent) {
                     popInfo.add(PopType.ERR, $t('连接失败') + ': ' + e.message)
                 } else {
@@ -330,6 +368,14 @@ export class Connector {
                 // TLS 错误，尝试使用 ws 连接
                 popInfo.add(PopType.ERR, $t('连接失败') + ': ' + $t('TLS错误'), false)
                 this.create(address, token, false)
+                break
+            }
+            case 4001: {
+                popInfo.add(
+                    PopType.ERR,
+                    $t('连接失败') + ': ' + (msg || $t('服务器连接中继不可用')),
+                    false,
+                )
                 break
             }
             default: {
