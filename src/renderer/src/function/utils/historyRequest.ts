@@ -33,8 +33,8 @@ export function createHistoryRequestTracker() {
             requestGeneration: number | undefined,
             session: HistorySession,
         ): boolean {
-            return active !== undefined &&
-                active.generation === requestGeneration &&
+            if (requestGeneration === undefined) return false
+            return active?.generation === requestGeneration &&
                 isSameHistorySession(active, session)
         },
     }

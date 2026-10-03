@@ -615,34 +615,46 @@ const noticeFunctions = {
     },
 } as { [key: string]: (name: string, msg: { [key: string]: any }) => void }
 
+function reportChatHistoryFailure(requestGeneration: number | undefined, appendToTop: boolean, error?: Error) {
+    const uiStore = useUIStore()
+    const chatStore = useChatStore()
+    if (!historyRequestTracker.isActive(requestGeneration, chatStore.chatInfo.show)) return
+
+    if (error) logger.error(error, '加载历史消息失败')
+    new PopInfo().add(PopType.ERR, app.config.globalProperties.$t('获取历史记录失败'))
+    uiStore.loadHistoryFail = true
+    if (appendToTop) {
+        uiStore.historyBeforeTime = undefined
+        uiStore.nowGetHistory = false
+    }
+}
+
+function persistMessageHistory(selfId: string | number, list: any[]) {
+    saveMessagesWithSideEffects(selfId, list).catch(error => {
+        logger.error(error, '保存本地历史消息失败')
+    })
+}
+
 function handleChatHistoryResponse(
     msg: { [key: string]: any },
     echoList?: string[],
     appendToTop = false,
 ) {
-    const uiStore = useUIStore()
     const chatStore = useChatStore()
     const requestGeneration = getHistoryGeneration(echoList)
     const isActiveRequest = () =>
         historyRequestTracker.isActive(requestGeneration, chatStore.chatInfo.show)
+    const onError = (error: Error) => reportChatHistoryFailure(requestGeneration, appendToTop, error)
 
     if (!isActiveRequest()) return
     if (msg.data === null) {
-        new PopInfo().add(
-            PopType.ERR,
-            app.config.globalProperties.$t('获取历史记录失败'),
-        )
-        uiStore.loadHistoryFail = true
-        if (appendToTop) {
-            uiStore.historyBeforeTime = undefined
-            uiStore.nowGetHistory = false
-        }
+        reportChatHistoryFailure(requestGeneration, appendToTop)
         return
     }
 
     if (!appendToTop) {
         // 无论是否有本地预填充，都以网络数据替换（保证最新消息不遗漏）
-        saveMsg(msg, undefined, requestGeneration)
+        saveMsg(msg, undefined, requestGeneration).catch(onError)
         return
     }
 
@@ -660,7 +672,7 @@ function handleChatHistoryResponse(
                 pan.style.scrollBehavior = 'smooth'
             }, 200);
         })
-    })
+    }).catch(onError)
 }
 
 const msgFunctions = {
@@ -949,7 +961,7 @@ const msgFunctions = {
                 if (inserted.length === chatStore.messageList.length) return
                 replaceMessageListInPlace(inserted)
                 // 同步存入本地 DB，以便下次直接从本地加载
-                saveMessagesWithSideEffects(authStore.loginInfo.uin, list)
+                persistMessageHistory(authStore.loginInfo.uin, list)
             })
             .catch(() => {})
     },
@@ -1828,7 +1840,7 @@ async function saveMsg(
         }
     }
 
-    saveMessagesWithSideEffects(authStore.loginInfo.uin, list)
+    persistMessageHistory(authStore.loginInfo.uin, list)
     if (!applyHistoryMessageList(list, append)) return
     chatStore.messageList.forEach(item => sendMsgAppendInfo(item))
     updateHistorySessionPreview()

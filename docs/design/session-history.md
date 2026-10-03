@@ -34,6 +34,11 @@ requests also use parts of the message pipeline but have different ownership.
 - History data updates do not require the standard view's `msgPan` element.
   Scroll adjustment is optional and checks both request ownership and the
   captured DOM element before changing its position.
+- Catch normalization failures in both history callbacks and recheck request
+  ownership before reporting failure or releasing pagination. A late rejection
+  must not change the new chat's error/loading state.
+- Catch background local-history persistence failures separately. A database
+  write failure is logged without rejecting a successfully displayed response.
 - `saveMsg` also appends live messages. Those calls do not require a history
   generation; they capture the destination chat before normalization and
   check it again afterwards.
@@ -47,7 +52,9 @@ Run `yarn test:session-switch`, `yarn check` and `yarn build` after changes.
 The Node regression suite runs production history functions and the actual
 alternate-view paging callbacks with controlled stores, asynchronous I/O and
 schedulers. The helper uses the project's TypeScript compiler to select their
-function bodies without initializing the browser application.
+function bodies and loads the compiled module through Node's module loader
+without initializing the browser application. Generated modules live under
+the temporary `.agents` directory and are removed after loading.
 
 Tests cover delayed cache reads, message normalization, error responses,
 pagination, gap filling, scheduled scrolling, alternate views, path-map

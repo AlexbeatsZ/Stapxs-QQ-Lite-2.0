@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import vm from 'node:vm'
+import { mkdirSync, mkdtempSync, readFileSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import ts from 'typescript'
 
 import * as history from '../../src/renderer/src/function/utils/historyRequest.ts'
@@ -53,7 +55,7 @@ function gapFillSource() {
     return callback.getText(source)
 }
 
-export function createHistoryRuntime() {
+export async function createHistoryRuntime() {
     const chat = { chatInfo: { show: { id: 10001, type: 'group' } }, messageList: [] }
     const ui = { nowGetHistory: false, canLoadHistory: true, loadHistoryFail: false, historyBeforeTime: undefined }
     const settings = { sysConfig: { enable_local_history: false, mixed_load_messages: true } }
@@ -63,6 +65,7 @@ export function createHistoryRuntime() {
     const notifications = []
     const sent = []
     const saved = []
+    const errors = []
     const ticks = []
     const timers = []
     const pan = { scrollHeight: 100, style: {}, scrollTop: 0 }
@@ -89,7 +92,7 @@ export function createHistoryRuntime() {
         getMsgData: (name, payload) => name === 'message_list' ? payload.messages : payload?.infoList,
         getMessageList: async list => list,
         msgPath: { message_info: {}, message_list: {} },
-        saveMessagesWithSideEffects: (_selfId, list) => saved.push(list),
+        saveMessagesWithSideEffects: async (_selfId, list) => saved.push(list),
         mergeMessagesByIdAndTime: (current, incoming) => [...current, ...incoming],
         replaceMessageListInPlace: list => { chat.messageList = list },
         insertHistorySegmentAtAnchor: (current, _anchor, incoming) => [...incoming, ...current],
@@ -99,14 +102,20 @@ export function createHistoryRuntime() {
         document: { getElementById: () => pan },
         nextTick: callback => { ticks.push(callback) },
         setTimeout: callback => { timers.push(callback) },
-        logger: { debug: () => {} },
+        logger: { debug: () => {}, error: (...args) => errors.push(args) },
         opt: { value: { loop: true } },
         props: { get list() { return chat.messageList } },
         getMsgRawTxt: message => message.message_id,
         danmus: { value: [] },
         danmakuRef: { value: undefined },
     }
-    Object.defineProperty(runtime, 'list', { get: () => chat.messageList })
+    // Vue's destructured list prop stays current when the store replaces its array.
+    runtime.list = new Proxy([], {
+        get: (_target, property) => {
+            const value = chat.messageList[property]
+            return typeof value === 'function' ? value.bind(chat.messageList) : value
+        },
+    })
     const functions = [
         ['src/renderer/src/function/utils/appUtil.ts', 'loadHistory'],
         ['src/renderer/src/function/utils/appUtil.ts', 'loadHistoryMessage'],
@@ -116,6 +125,8 @@ export function createHistoryRuntime() {
         ['src/renderer/src/function/msg.ts', 'applyHistoryMessageList'],
         ['src/renderer/src/function/msg.ts', 'updateHistorySessionPreview'],
         ['src/renderer/src/function/msg.ts', 'saveMsg'],
+        ['src/renderer/src/function/msg.ts', 'reportChatHistoryFailure'],
+        ['src/renderer/src/function/msg.ts', 'persistMessageHistory'],
         ['src/renderer/src/function/msg.ts', 'handleChatHistoryResponse'],
         ['src/renderer/src/pages/Chat.vue', 'loadMoreHistory'],
         ['src/renderer/src/pages/Chat.vue', 'detectSeqGaps'],
@@ -127,16 +138,35 @@ export function createHistoryRuntime() {
         return { name, source }
     })
     const code = [
+        'export default function createFunctions(runtime) {',
+        ...Object.keys(runtime).map(name => typeof runtime[name] === 'function' && name !== 'PopInfo'? `const ${name} = (...args) => runtime.${name}(...args)`: `const ${name} = runtime.${name}`),
         ...available.map(item => item.source),
-        `globalThis.api = { ${available.map(item => item.name).join(', ')} }`,
+        `const api = { ${available.map(item => item.name).join(', ')} }`,
         `api.gapFill = ${gapFillSource()}`,
         functionSource('src/renderer/src/pages/chat-view/Chat弹幕.vue', 'updateList'),
         'api.updateDanmakuList = updateList',
         `api.terminalCommand = ${callbackSource('src/renderer/src/pages/chat-view/Chat终端.vue', 'ssqq', 'fun')}`,
+        'return api',
+        '}',
     ].join('\n')
-    const context = vm.createContext(runtime)
-    vm.runInContext(ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context)
-    return { chat, ui, settings, auth, contacts, tracker, notifications, sent, saved, ticks, timers, pan, runtime, api: context.api }
+    // Load only compiler output from the fixed repository sources through Node's
+    // module loader. Keep generated modules out of the checkout and remove them.
+    const tempRoot = path.join(tmpdir(), '.agents')
+    mkdirSync(tempRoot, { recursive: true })
+    const tempDir = mkdtempSync(path.join(tempRoot, 'stapxs-history-test-'))
+    const modulePath = path.join(tempDir, 'history-functions.mjs')
+    let api
+    try {
+        writeFileSync(modulePath, ts.transpileModule(code, {
+            compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+        }).outputText)
+        const { default: createFunctions } = await import(pathToFileURL(modulePath).href)
+        api = createFunctions(runtime)
+    } finally {
+        unlinkSync(modulePath)
+        rmdirSync(tempDir)
+    }
+    return { chat, ui, settings, auth, contacts, tracker, notifications, sent, saved, errors, ticks, timers, pan, runtime, api }
 }
 
 export const flushHistoryCallbacks = () => new Promise(resolve => setImmediate(resolve))
