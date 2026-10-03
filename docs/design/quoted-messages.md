@@ -54,6 +54,9 @@ the active conversation because their source chat is unknown.
 - Scroll compensation completes before the final jump. Quote navigation does
   not schedule the normal history callback's delayed 200ms correction, which
   could otherwise overwrite the target position after it is highlighted.
+  Quote jumps ask the existing scroll/highlight helper to center the target in
+  the viewport; its legacy offset can hide the first original behind the chat
+  header. Other callers retain their existing scroll position.
 
 ## Verification
 

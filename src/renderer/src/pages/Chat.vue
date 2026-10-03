@@ -1107,9 +1107,7 @@ async function loadMoreHistory(reply?: { isActive: () => boolean }) {
 }
 
 async function loadLocalOlderHistory(firstMsgId: string | number, firstMsgTime: number) {
-    const local = Number.isFinite(firstMsgTime)
-        ? await dbGetBeforeByTime(authStore.loginInfo.uin, chatStore.chatInfo.show.id, firstMsgTime, 20)
-        : await dbGetBefore(authStore.loginInfo.uin, chatStore.chatInfo.show.id, String(firstMsgId), 20)
+    const local = Number.isFinite(firstMsgTime)? await dbGetBeforeByTime(authStore.loginInfo.uin, chatStore.chatInfo.show.id, firstMsgTime, 20): await dbGetBefore(authStore.loginInfo.uin, chatStore.chatInfo.show.id, String(firstMsgId), 20)
     if (local.length === 0) return
     const existingIds = new Set(chatStore.messageList.map(message => String(message.message_id ?? '')))
     const added = local.filter(message => {
@@ -1163,7 +1161,7 @@ async function waitForHistoryIdle(isActive: () => boolean): Promise<boolean> {
 
 async function jumpToQuotedMessage(messageId: string) {
     cancelReplyJump()
-    if (scrollToMsg(messageId, true)) return
+    if (scrollToMsg(messageId, true, true, true)) return
     const pan = document.getElementById('msgPan')
     if (!pan || !quotedMessages.canRequest) return
     const jump = replyJump
@@ -1185,7 +1183,7 @@ async function jumpToQuotedMessage(messageId: string) {
             rendered: async () => { await nextTick() },
         })
         if (!isActive()) return
-        if (result === 'found') scrollToMsg(messageId, true)
+        if (result === 'found') scrollToMsg(messageId, true, true, true)
         else if (result === 'unavailable') new PopInfo().add(PopType.INFO, $t('无法定位上下文'))
     } finally {
         if (isActive()) replyLoading.value = false
