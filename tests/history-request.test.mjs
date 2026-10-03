@@ -35,3 +35,11 @@ test('round-trips the request generation through an echo', () => {
     assert.equal(getHistoryGeneration(echo.split('_')), request.generation)
     assert.equal(getHistoryGeneration(['getChatHistory', 'invalid']), undefined)
 })
+
+test('rejects missing generations before and after a session becomes active', () => {
+    const tracker = createHistoryRequestTracker()
+    const session = { id: 10001, type: 'group' }
+    assert.equal(tracker.isActive(undefined, session), false)
+    tracker.begin(session)
+    assert.equal(tracker.isActive(undefined, session), false)
+})

@@ -9,6 +9,10 @@ export type HistoryRequest = {
     type: string
 }
 
+export function isSameHistorySession(first: HistorySession, second: HistorySession): boolean {
+    return String(first.id) === String(second.id) && first.type === second.type
+}
+
 export function createHistoryRequestTracker() {
     let generation = 0
     let active: HistoryRequest | undefined
@@ -26,12 +30,12 @@ export function createHistoryRequestTracker() {
             return active
         },
         isActive(
-            requestGeneration: number,
+            requestGeneration: number | undefined,
             session: HistorySession,
         ): boolean {
-            return active?.generation === requestGeneration &&
-                active.id === String(session.id) &&
-                active.type === session.type
+            return active !== undefined &&
+                active.generation === requestGeneration &&
+                isSameHistorySession(active, session)
         },
     }
 }

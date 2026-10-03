@@ -48,6 +48,8 @@ import { dbGetLatest } from './localHistoryUtil'
 import {
     createHistoryEcho,
     historyRequestTracker,
+    isSameHistorySession,
+    type HistoryRequest,
 } from './historyRequest'
 import { parseMsg } from '../sender'
 import { Notify } from '../notify'
@@ -166,9 +168,16 @@ export function loadHistoryMessage(
     type: string,
     count = 20,
     echo?: string,
+    messageId: string | number = 0,
 ) {
     const authStore = useAuthStore()
     const chatStore = useChatStore()
+    if (echo === undefined) {
+        const request = historyRequestTracker.current()
+        if (!request || !isSameHistorySession(request, { id, type }) ||
+            !historyRequestTracker.isActive(request.generation, chatStore.chatInfo.show)) return false
+        echo = createHistoryEcho('getChatHistoryFist', request)
+    }
     let name: string
     const fullPage = authStore.jsonMap.message_list?.pagerType == 'full'
     if (authStore.jsonMap.message_list && type != 'group') {
@@ -182,12 +191,33 @@ export function loadHistoryMessage(
         {
             group_id: type == 'group' ? id : undefined,
             user_id: type != 'group' ? id : undefined,
-            message_id: 0,
+            message_id: messageId,
             count: fullPage ? chatStore.messageList.length + count : count,
         },
-        echo ?? 'getChatHistoryFist',
+        echo,
     )
     return true
+}
+
+/** Load an older page for the active chat, including alternate chat views. */
+export function loadMoreHistoryMessages(
+    messageId: string | number,
+    count = 20,
+    request: HistoryRequest | undefined = historyRequestTracker.current(),
+) {
+    const chatStore = useChatStore()
+    if (!request || !historyRequestTracker.isActive(
+        request.generation,
+        chatStore.chatInfo.show,
+    )) return false
+
+    return loadHistoryMessage(
+        Number(request.id),
+        request.type,
+        count,
+        createHistoryEcho('getChatHistory', request),
+        messageId,
+    )
 }
 
 /**

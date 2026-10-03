@@ -587,6 +587,7 @@ import {
 	scrollToMsg,
     downloadFile,
     loadHistory as loadHistoryFirst,
+    loadMoreHistoryMessages,
     shouldAutoFocus,
 	vMenu,
 	vMove,
@@ -1120,26 +1121,7 @@ async function loadMoreHistory() {
             chatStore.chatInfo.show,
         )) return
 
-        const fullPage =
-            authStore.jsonMap.message_list?.pagerType == 'full'
-        const type = chatStore.chatInfo.show.type
-        const id = chatStore.chatInfo.show.id
-        let name
-        if (authStore.jsonMap.message_list && type != 'group') {
-            name = authStore.jsonMap.message_list.private_name
-        } else {
-            name = authStore.jsonMap.message_list.name
-        }
-        Connector.send(
-            name ?? 'get_chat_history',
-            {
-                group_id: type == 'group' ? id : undefined,
-                user_id: type != 'group' ? id : undefined,
-                message_id: firstMsgId,
-                count: fullPage? chatStore.messageList.length + 20: 20,
-            },
-            createHistoryEcho('getChatHistory', historyRequest),
-        )
+        loadMoreHistoryMessages(firstMsgId, 20, historyRequest)
     }
 }
 
