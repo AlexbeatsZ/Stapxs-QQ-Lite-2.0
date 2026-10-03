@@ -62,6 +62,14 @@ the active conversation because their source chat is unknown.
 
 ## Verification
 
+The self-hosted integration also includes PR #403's guarded history pipeline.
+Quote pages keep the navigation ownership callback across normalization and
+preserve existing history even with a full-page adapter. The paging adapter
+additionally captures the active history generation, so a response from an
+earlier A load cannot revive after A -> B -> A. Normal paging and local gap
+filling retain their numbered callbacks. Run both history regression suites
+when resolving changes between these two branches.
+
 Run yarn check and yarn build sequentially. Production-function tests cover
 preview ownership plus loaded targets, multi-page navigation, render waits,
 duplicate pages, exhaustion/failure and cancellation. Browser acceptance must
