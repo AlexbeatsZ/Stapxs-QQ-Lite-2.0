@@ -56,7 +56,9 @@ the active conversation because their source chat is unknown.
   could otherwise overwrite the target position after it is highlighted.
   Quote jumps ask the existing scroll/highlight helper to center the target in
   the viewport; its legacy offset can hide the first original behind the chat
-  header. Other callers retain their existing scroll position.
+  header. Keep programmatic positioning just above the zero-scroll paging
+  threshold so the final jump cannot launch a normal full-page replacement.
+  Other callers retain their existing scroll position.
 
 ## Verification
 

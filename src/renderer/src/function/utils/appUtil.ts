@@ -65,7 +65,8 @@ export function scrollToMsg(seqName: string, showAnimation: boolean, showHighlig
             } else {
                 pan.style.scrollBehavior = 'smooth'
             }
-            pan.scrollTop = centerInView? msg.offsetTop - (pan.clientHeight - msg.offsetHeight) / 2: msg.offsetTop - msg.offsetHeight + 10
+            // A programmatic quote jump must not trigger scroll-at-zero paging.
+            pan.scrollTop = centerInView? Math.max(1, msg.offsetTop - (pan.clientHeight - msg.offsetHeight) / 2): msg.offsetTop - msg.offsetHeight + 10
             pan.style.scrollBehavior = 'smooth'
             if (showHighlight) {
                 msg.style.transition = 'background 1s'
