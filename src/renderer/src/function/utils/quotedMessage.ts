@@ -207,3 +207,27 @@ export function quotePreviewMessage(message: QuotedMessage | undefined): QuotedM
         }),
     }
 }
+
+/** A single click loads successive older pages, then the caller performs the existing jump. */
+export async function loadHistoryToQuotedMessage(options: {
+    isActive: () => boolean
+    hasTarget: () => boolean
+    boundary: () => string | undefined
+    loadOlder: () => Promise<boolean>
+    rendered: () => Promise<void>
+}): Promise<'found' | 'unavailable' | 'cancelled'> {
+    const visited = new Set<string>()
+    await options.rendered()
+    while (options.isActive()) {
+        if (options.hasTarget()) return 'found'
+        const boundary = options.boundary()
+        if (!boundary || visited.has(boundary)) return 'unavailable'
+        visited.add(boundary)
+        const loaded = await options.loadOlder()
+        await options.rendered()
+        if (!options.isActive()) return 'cancelled'
+        if (options.hasTarget()) return 'found'
+        if (!loaded) return 'unavailable'
+    }
+    return 'cancelled'
+}

@@ -13,7 +13,6 @@ export const useQuotedMessagesStore = defineStore('quoted-messages', () => {
     const chatStore = useChatStore()
     const cachedEntries = shallowRef(new Map<string, QuoteEntry>())
     const scopeVersion = ref(0)
-    const viewerId = ref<string | null>(null)
     const canRequest = computed(() => login.status && Boolean(authStore.loginInfo.uin) &&
         Boolean(chatStore.chatInfo.show.id) && Boolean(authStore.jsonMap))
 
@@ -32,7 +31,6 @@ export const useQuotedMessagesStore = defineStore('quoted-messages', () => {
     // Synchronous invalidation also catches A -> B -> A within a single Vue tick.
     watch(() => [login.status, login.address, authStore.loginInfo.uin, authStore.jsonMap,
         chatStore.chatInfo.show, chatStore.chatInfo.show.type, chatStore.chatInfo.show.id], () => {
-        viewerId.value = null
         loader.reset()
         scopeVersion.value++
     }, { flush: 'sync' })
@@ -56,13 +54,7 @@ export const useQuotedMessagesStore = defineStore('quoted-messages', () => {
         return loader.load(id, retry)
     }
 
-    function open(id: string | number) {
-        viewerId.value = String(id)
-        void load(id, true)
-    }
-
-    function close() { viewerId.value = null }
     function revoke(id: string | number) { loader.revoke(id) }
 
-    return { scopeVersion, viewerId, canRequest, entry, load, open, close, revoke }
+    return { scopeVersion, canRequest, entry, load, revoke }
 })

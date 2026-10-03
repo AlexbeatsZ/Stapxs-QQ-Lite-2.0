@@ -235,7 +235,6 @@
             :merge-list="chatStore.mergeMessageList"
             :list="chatStore.messageList" :chat="chatStore.chatInfo"
             @user-click="changeChat" />
-        <QuotedMessagePan />
         <TransitionGroup class="app-msg" name="appmsg" tag="div">
             <div v-for="msg in appMsgs" :key="'appmsg-' + msg.id">
                 <div><font-awesome-icon :icon="['fas', msg.svg]" /></div>
@@ -345,7 +344,6 @@ import MusicPlayer, { getCurrentMusic } from './components/MusicPlayer.vue'
 import FileManager, { panelVisible, closePanel, getDownloadTasks, getUploadTasks } from './components/FileManager.vue'
 import GlobalSessionSearchBar from './components/GlobalSessionSearchBar.vue'
 import NtViewer from './components/ViewerCom.vue'
-import QuotedMessagePan from './components/QuotedMessagePan.vue'
 import Tooltips from './components/tooltip/Tooltips.vue'
 import { useQzoneStore } from './state/qzone'
 

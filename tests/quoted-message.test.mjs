@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-    QuotedMessageLoader, QuoteRequestError, quotePreviewMessage, requestQuotedMessage,
+    QuotedMessageLoader, QuoteRequestError, quotePreviewMessage, requestQuotedMessage, loadHistoryToQuotedMessage,
 } from '../src/renderer/src/function/utils/quotedMessage.ts'
 
 function deferred() {
@@ -222,4 +222,59 @@ test('compact previews preserve one image and omit nested replies without mutati
         assert.equal(quotePreviewMessage(message(1, { message: [{ type }] })), null)
     }
     assert.equal(quotePreviewMessage(message(1, { revoke: true })), null)
+})
+
+test('an already rendered original jumps without loading older history', async () => {
+    let calls = 0
+    assert.equal(await loadHistoryToQuotedMessage({ isActive: () => true, hasTarget: () => true,
+        boundary: () => '20', loadOlder: async () => { calls++; return true }, rendered: async () => {} }), 'found')
+    assert.equal(calls, 0)
+})
+
+test('one click loads every required page before the original is rendered', async () => {
+    let oldest = 61, rendered = 61
+    const anchors = []
+    const result = await loadHistoryToQuotedMessage({ isActive: () => true, hasTarget: () => rendered === 1,
+        boundary: () => String(oldest), loadOlder: async () => {
+            anchors.push(oldest)
+            oldest -= 20
+            return true
+        }, rendered: async () => { rendered = oldest } })
+    assert.equal(result, 'found')
+    assert.deepEqual(anchors, [61, 41, 21])
+})
+
+test('a repeated page stops navigation even if live messages grow the list', async () => {
+    let calls = 0, liveCount = 0
+    assert.equal(await loadHistoryToQuotedMessage({ isActive: () => true, hasTarget: () => false,
+        boundary: () => '61', loadOlder: async () => { calls++; liveCount++; return true },
+        rendered: async () => {} }), 'unavailable')
+    assert.equal(calls, 1)
+    assert.equal(liveCount, 1)
+})
+
+test('history exhaustion and request failures stop without another page', async () => {
+    let calls = 0
+    assert.equal(await loadHistoryToQuotedMessage({ isActive: () => true, hasTarget: () => false,
+        boundary: () => '61', loadOlder: async () => { calls++; return false }, rendered: async () => {} }), 'unavailable')
+    assert.equal(calls, 1)
+})
+
+test('a superseded jump or chat switch cancels pending navigation', async () => {
+    const pending = deferred()
+    let active = true, calls = 0
+    const result = loadHistoryToQuotedMessage({ isActive: () => active, hasTarget: () => false,
+        boundary: () => '61', loadOlder: () => { calls++; return pending.promise }, rendered: async () => {} })
+    await Promise.resolve()
+    active = false
+    pending.resolve(true)
+    assert.equal(await result, 'cancelled')
+    assert.equal(calls, 1)
+})
+
+test('cancellation before navigation never requests a page', async () => {
+    let calls = 0
+    assert.equal(await loadHistoryToQuotedMessage({ isActive: () => false, hasTarget: () => false,
+        boundary: () => '61', loadOlder: async () => { calls++; return true }, rendered: async () => {} }), 'cancelled')
+    assert.equal(calls, 0)
 })

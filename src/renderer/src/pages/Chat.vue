@@ -62,7 +62,7 @@
             </div>
         </div>
         <!-- 加载中指示器 -->
-        <div :class=" 'loading' + (uiStore.nowGetHistory && uiStore.canLoadHistory ? ' show' : '')">
+        <div :class=" 'loading' + ((uiStore.nowGetHistory || replyLoading) && uiStore.canLoadHistory ? ' show' : '')">
             <font-awesome-icon :icon="['fas', 'spinner']" />
             <span>{{ $t('加载中') }}</span>
         </div>
@@ -104,7 +104,7 @@
                             :image-list-header="chatImg"
                             @click="msgClick($event, msgIndex)"
                             @show-menu="showMsgMeun"
-                            @scroll-to-msg="scrollToMsg"
+                            @scroll-to-msg="jumpToQuotedMessage"
                             @image-loaded="imgLoadedScroll"
                             @left-move="replyMsg"
                             @send-poke="sendPoke" />
@@ -609,6 +609,9 @@ import {
 } from '@renderer/function/utils/msgUtil'
 import { Logger, LogType, PopInfo, PopType } from '@renderer/function/base'
 import { Connector } from '@renderer/function/connect'
+import { appendHistoryForQuotedMessage } from '@renderer/function/msg'
+import { loadHistoryToQuotedMessage } from '@renderer/function/utils/quotedMessage'
+import { useQuotedMessagesStore } from '@renderer/state/quotedMessages'
 import {
     BaseChatInfoElem,
     MsgItemElem,
@@ -660,6 +663,19 @@ const settingsStore = useSettingsStore()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 const contactStore = useContactStore()
+const quotedMessages = useQuotedMessagesStore()
+const replyLoading = ref(false)
+let replyJump = 0
+
+function cancelReplyJump() {
+    replyJump++
+    if (!replyLoading.value) return
+    replyLoading.value = false
+    uiStore.nowGetHistory = false
+    uiStore.historyBeforeTime = undefined
+}
+
+watch(() => quotedMessages.scopeVersion, cancelReplyJump, { flush: 'sync' })
 const mergePan = useTemplateRef<InstanceType<typeof MergePan>>('mergePan')
 const msgPan = useTemplateRef<HTMLDivElement>('msgPan')
 const chatPadding = useTemplateRef<HTMLSpanElement>('chatPadding')
@@ -882,6 +898,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+    cancelReplyJump()
     if (resizeMainInputFrame !== null) {
         cancelAnimationFrame(resizeMainInputFrame)
         resizeMainInputFrame = null
@@ -1031,7 +1048,7 @@ function chatScroll(event: Event, pass: boolean) {
     if(pass) return
 
     const body = event.target as HTMLDivElement
-    if (body.scrollTop === 0 && list.length > 0) {
+    if (body.scrollTop === 0 && list.length > 0 && !replyLoading.value) {
         loadMoreHistory()
     }
     if ((body.scrollTop + body.clientHeight + 10) >= body.scrollHeight) {
@@ -1047,10 +1064,10 @@ function chatScroll(event: Event, pass: boolean) {
     }
 }
 
-async function loadMoreHistory() {
+async function loadMoreHistory(reply?: { isActive: () => boolean }) {
     if (
         !uiStore.nowGetHistory &&
-        uiStore.canLoadHistory !== false
+        uiStore.canLoadHistory !== false && list.length > 0
     ) {
         const firstMsgId = list[0].message_id
         const firstMsgTime = Number(list[0]?.time)
@@ -1065,7 +1082,9 @@ async function loadMoreHistory() {
         }
         uiStore.loadHistoryFail = false
 
-        if (useMixedHistory) {
+        // Quote navigation pages from the network boundary. Local gap-fill callbacks
+        // are independent of this navigation and must not outlive its ownership.
+        if (useMixedHistory && !reply) {
             let localMsgs = [] as any[]
             if (Number.isFinite(firstMsgTime)) {
                 localMsgs = await dbGetBeforeByTime(
@@ -1109,16 +1128,88 @@ async function loadMoreHistory() {
         } else {
             name = authStore.jsonMap.message_list.name
         }
-        Connector.send(
-            name ?? 'get_chat_history',
-            {
-                group_id: type == 'group' ? id : undefined,
-                user_id: type != 'group' ? id : undefined,
-                message_id: firstMsgId,
-                count: fullPage? chatStore.messageList.length + 20: 20,
+        const params = {
+            group_id: type == 'group' ? id : undefined,
+            user_id: type != 'group' ? id : undefined,
+            message_id: firstMsgId,
+            count: fullPage ? chatStore.messageList.length + 20 : 20,
+        }
+        if (!reply) {
+            Connector.send(name ?? 'get_chat_history', params, 'getChatHistory')
+            return true
+        }
+        return requestQuotedHistoryPage(name ?? 'get_chat_history', params, reply.isActive)
+    }
+    return false
+}
+
+async function requestQuotedHistoryPage(action: string, params: Record<string, unknown>, isActive: () => boolean) {
+    try {
+        const response = await Connector.callRawApi(action, params, 10000)
+        if (!isActive()) return false
+        if (response?.status !== 'ok' || Number(response.retcode ?? 0) !== 0 || response.data == null) {
+            throw new Error('History request failed')
+        }
+        await appendHistoryForQuotedMessage(response, isActive)
+        return isActive()
+    } catch (error) {
+        if (isActive()) {
+            new Logger().error(error as Error, 'Loading quoted message history failed')
+            uiStore.loadHistoryFail = true
+        }
+        return false
+    } finally {
+        if (isActive()) {
+            uiStore.nowGetHistory = false
+            uiStore.historyBeforeTime = undefined
+        }
+    }
+}
+
+async function waitForHistoryIdle(isActive: () => boolean): Promise<boolean> {
+    if (!uiStore.nowGetHistory) return isActive()
+    return new Promise(resolve => {
+        const finish = (ready: boolean) => {
+            stop()
+            clearTimeout(timer)
+            resolve(ready)
+        }
+        const stop = watch(() => [uiStore.nowGetHistory, quotedMessages.scopeVersion, replyJump], () => {
+            if (!isActive()) finish(false)
+            else if (!uiStore.nowGetHistory) finish(true)
+        })
+        const timer = setTimeout(() => finish(false), 10000)
+    })
+}
+
+async function jumpToQuotedMessage(messageId: string) {
+    cancelReplyJump()
+    if (scrollToMsg(messageId, true)) return
+    const pan = document.getElementById('msgPan')
+    if (!pan || !quotedMessages.canRequest) return
+    const jump = replyJump
+    const scope = quotedMessages.scopeVersion
+    const isActive = () => jump === replyJump && scope === quotedMessages.scopeVersion && pan.isConnected
+    replyLoading.value = true
+    tags.value.showBottomButton = true
+    try {
+        if (!await waitForHistoryIdle(isActive) || !isActive()) return
+        pan.scrollTop = 0
+        const result = await loadHistoryToQuotedMessage({
+            isActive,
+            hasTarget: () => {
+                const target = document.getElementById(messageId)
+                return target !== null && pan.contains(target)
             },
-            'getChatHistory',
-        )
+            boundary: () => list[0]?.message_id == null ? undefined : String(list[0].message_id),
+            loadOlder: () => loadMoreHistory({ isActive }),
+            rendered: async () => { await nextTick() },
+        })
+        if (!isActive()) return
+        if (result === 'found') scrollToMsg(messageId, true)
+        else if (result === 'unavailable') new PopInfo().add(PopType.INFO, $t('无法定位上下文'))
+    } finally {
+        if (isActive()) replyLoading.value = false
     }
 }
 
@@ -1187,7 +1278,7 @@ function scrollToMsgLocal(message_id: string) {
 function imgLoadedScroll(height: number) {
     const pan = document.getElementById('msgPan')
     if(pan) {
-        if(list.length <= 20 && !tags.value.showBottomButton) {
+        if(list.length <= 20 && !tags.value.showBottomButton && !replyLoading.value) {
             scrollBottom()
         } else {
             scrollTo(pan.scrollTop + height, false)
@@ -2473,6 +2564,7 @@ function updateList(newLength: number, oldLength: number) {
     if (
         tags.value.showBottomButton &&
         !uiStore.nowGetHistory &&
+        !replyLoading.value &&
         oldLength > 0
     ) {
         if (NewMsgNum.value !== 0) {

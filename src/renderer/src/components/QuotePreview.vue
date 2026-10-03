@@ -47,7 +47,7 @@ const original = computed(() => state.value?.message ??
     chatStore.messageList.find(message => String(message.message_id) === String(props.messageId) &&
         Array.isArray(message.message) && message.sender))
 const body = computed(() => quotePreviewMessage(original.value))
-const label = computed(() => [$t('查看引用消息'), original.value && !original.value.revoke ?getMsgRawTxt(original.value) : ''].filter(Boolean).join(' '))
+const label = computed(() => [$t('跳转到引用消息'), original.value && !original.value.revoke ?getMsgRawTxt(original.value) : ''].filter(Boolean).join(' '))
 const time = computed(() => original.value && !original.value.revoke ?new Intl.DateTimeFormat(getTrueLang(), { month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' })
         .format(getViewTime(Number(original.value.time))) : '')
 let observer: IntersectionObserver | undefined
@@ -59,13 +59,8 @@ function prefetch() {
 }
 
 function activate() {
-    const targetId = 'chat-' + props.messageId
-    const target = document.getElementById(targetId)
-    if (target && document.getElementById('msgPan')?.contains(target)) {
-        emit('scrollToMsg', targetId)
-    } else if (props.remote) {
-        quotes.open(props.messageId)
-    }
+    if (props.remote && state.value?.status === 'error') void quotes.load(props.messageId, true)
+    emit('scrollToMsg', 'chat-' + props.messageId)
 }
 
 watch(() => [props.messageId, quotes.scopeVersion, quotes.canRequest, visible.value], prefetch)

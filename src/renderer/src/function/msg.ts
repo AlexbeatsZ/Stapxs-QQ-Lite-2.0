@@ -1710,13 +1710,20 @@ function saveClassInfo(
     settingsStore.classes = list
 }
 
-async function saveMsg(msg: any, append = undefined as undefined | string) {
+export async function appendHistoryForQuotedMessage(msg: any, isActive: () => boolean) {
+    if (!isActive()) return
+    await saveMsg(msg, 'top', isActive)
+}
+
+async function saveMsg(msg: any, append = undefined as undefined | string, isActive = () => true) {
+    if (!isActive()) return
     const uiStore = useUIStore()
     const authStore = useAuthStore()
     const chatStore = useChatStore()
     const contactStore = useContactStore()
     const settingsStore = useSettingsStore()
     let list = await normalizeMessagesFromPayload(msg)
+    if (!isActive()) return
     if (list != undefined) {
         const historyBeforeTime = Number(uiStore.historyBeforeTime)
         const hasHistoryBeforeTime = Number.isFinite(historyBeforeTime)
