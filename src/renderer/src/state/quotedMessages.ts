@@ -1,16 +1,17 @@
-import { computed, ref, watch } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { Connector, login } from '@renderer/function/connect'
 import { normalizeMessagesForPreview } from '@renderer/function/msg'
 import { buildMsgList } from '@renderer/function/utils/msgUtil'
 import { QuotedMessageLoader, QuoteRequestError, requestQuotedMessage } from '@renderer/function/utils/quotedMessage'
+import type { QuoteEntry } from '@renderer/function/utils/quotedMessage'
 import { useAuthStore } from './auth'
 import { useChatStore } from './chat'
 
 export const useQuotedMessagesStore = defineStore('quoted-messages', () => {
     const authStore = useAuthStore()
     const chatStore = useChatStore()
-    const revision = ref(0)
+    const cachedEntries = shallowRef(new Map<string, QuoteEntry>())
     const scopeVersion = ref(0)
     const viewerId = ref<string | null>(null)
     const canRequest = computed(() => login.status && Boolean(authStore.loginInfo.uin) &&
@@ -26,7 +27,7 @@ export const useQuotedMessagesStore = defineStore('quoted-messages', () => {
             normalize: raw => normalizeMessagesForPreview(buildMsgList([raw])),
             isActive,
         })
-    }, () => { revision.value++ })
+    }, () => { cachedEntries.value = new Map(loader.entries) })
 
     // Synchronous invalidation also catches A -> B -> A within a single Vue tick.
     watch(() => [login.status, login.address, authStore.loginInfo.uin, authStore.jsonMap,
@@ -42,9 +43,8 @@ export const useQuotedMessagesStore = defineStore('quoted-messages', () => {
     }
 
     function entry(id: string | number) {
-        // Subscribe rendering to completed requests without making message objects deep reactive.
-        void revision.value
-        const cached = loader.entries.get(String(id))
+        // Subscribe to cache snapshots without making message objects deep reactive.
+        const cached = cachedEntries.value.get(String(id))
         if (cached?.message?.revoke) return cached
         const local = localMessage(id)
         return local ? { status: 'ready' as const, message: local } : cached

@@ -1,7 +1,9 @@
 <template>
     <Teleport to="body">
-        <div v-if="quotes.viewerId !== null" class="quote-overlay" @click.self="quotes.close">
-            <section ref="panel" class="quote-panel ss-card" role="dialog"
+        <div v-if="quotes.viewerId !== null" class="quote-overlay">
+            <button type="button" class="quote-backdrop" :aria-label="$t('关闭')"
+                tabindex="-1" @click="quotes.close" />
+            <dialog ref="panel" class="quote-panel ss-card" open
                 aria-modal="true"
                 aria-labelledby="quote-title" tabindex="-1" @keydown="onKeydown">
                 <header>
@@ -39,7 +41,7 @@
                         {{ $t('返回聊天') }}
                     </button>
                 </footer>
-            </section>
+            </dialog>
         </div>
     </Teleport>
 </template>
@@ -72,7 +74,11 @@ watch(() => quotes.viewerId, async (id, previous) => {
 })
 
 function retry() {
-    if (quotes.viewerId !== null) void quotes.load(quotes.viewerId, true)
+    if (quotes.viewerId !== null) {
+        // The retry button disappears while loading; keep keyboard focus in the dialog.
+        panel.value?.focus()
+        void quotes.load(quotes.viewerId, true)
+    }
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -105,9 +111,12 @@ onUnmounted(quotes.close)
     align-items: center;
     justify-content: center;
     padding: 24px;
-    background: #0007;
 }
+.quote-backdrop { position: absolute; inset: 0; border: 0; background: #0007; }
 .quote-panel {
+    position: relative;
+    margin: 0;
+    border: 0;
     display: flex;
     flex-direction: column;
     width: min(560px, 100%);

@@ -10,7 +10,7 @@ function deferred() {
     return { promise, resolve, reject }
 }
 function message(id, extra = {}) {
-    return { message_id: id, time: 1788000000, sender: { user_id: 2, nickname: 'Sender' },
+    return { message_id: id, message_type: 'group', time: 1788000000, sender: { user_id: 2, nickname: 'Sender' },
         message: [{ type: 'text', text: 'Original message' }], ...extra }
 }
 function requestOptions(extra = {}) {
@@ -52,11 +52,21 @@ test('rejects failed, malformed, mismatched-ID and wrong-conversation responses'
         { status: 'ok', data: message(2) },
         { status: 'ok', data: message(1, { sender: null }) },
         { status: 'ok', data: message(1, { time: 'invalid' }) },
+        { status: 'ok', data: message(1, { time: null }) },
+        { status: 'ok', data: message(1, { message_type: undefined }) },
         { status: 'ok', data: message(1, { group_id: 20 }) },
         { status: 'ok', data: message(1, { message_type: 'private' }) }]) {
         await assert.rejects(requestQuotedMessage(requestOptions({ call: async () => response })), QuoteRequestError)
     }
 })
+test('accepts standard OneBot get_msg group responses without the optional group_id extension', async () => {
+    const original = await requestQuotedMessage(requestOptions({
+        call: async () => ({ status: 'ok', retcode: 0, data: message(1) }),
+    }))
+    assert.equal(original.message_type, 'group')
+    assert.equal(original.group_id, undefined)
+})
+
 test('supports private messages and string/number group identities', async () => {
     assert.equal((await requestQuotedMessage(requestOptions())).message_id, 1)
     const result = await requestQuotedMessage(requestOptions({ session: { id: '2', type: 'private' },

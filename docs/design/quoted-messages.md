@@ -25,6 +25,9 @@ currently active chat because their source conversation is unknown.
   a 10-second timeout. Normalize through the existing preview pipeline. Validate
   success status, original ID, sender, timestamp, message type and explicit group
   identity before normalization; validate the normalized ID/body afterwards.
+  `message_type` is required. The [OneBot 11 get_msg specification](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#get_msg-%E8%8E%B7%E5%8F%96%E6%B6%88%E6%81%AF)
+  omits `group_id` from its response fields, so group identity is checked when an
+  adapter supplies that extension rather than rejecting standard responses.
 - The cache is in memory and resets synchronously on connection/login, account,
   adapter or chat changes, including replacement of the same chat object. Each
   reset advances a generation. Recheck it after network and normalization waits.
@@ -39,6 +42,11 @@ currently active chat because their source conversation is unknown.
 - Original/preview DOM IDs use distinct prefixes so they cannot intercept the
   existing `chat-*` scroll lookup. The dialog sits below the image viewer and
   uses the existing body renderer for media and attachment interactions.
+  The native dialog uses `open` with the existing overlay and manual focus trap;
+  `showModal()` would put it above the application's image viewer in the browser
+  top layer. Reply cards use a native button alongside their rich body so links
+  and renderer markup are not nested inside a button. The compact body is inert;
+  media and links are interactive in the complete original dialog.
 
 ## Verification
 

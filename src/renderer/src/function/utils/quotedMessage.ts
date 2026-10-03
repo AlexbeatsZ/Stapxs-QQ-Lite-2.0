@@ -1,8 +1,16 @@
 export type QuoteFailure = 'unavailable' | 'timeout'
 
+export type QuotedMessage = {
+    message_id: string | number
+    message: any[]
+    [key: string]: any
+}
+
+type QuoteSession = { id: string | number; type: string; selfId?: string | number }
+
 export type QuoteEntry = {
     status: 'loading' | 'ready' | 'error'
-    message?: any
+    message?: QuotedMessage
     failure?: QuoteFailure
 }
 
@@ -15,14 +23,36 @@ export class QuoteRequestError extends Error {
     }
 }
 
+function belongsToSession(raw: any, session: QuoteSession): boolean {
+    if (raw.message_type !== (session.type === 'group' ? 'group' : 'private')) return false
+    if (session.type === 'group') {
+        // OneBot 11 get_msg does not require group_id; validate it when an adapter supplies it.
+        return raw.group_id == null || String(raw.group_id) === String(session.id)
+    }
+    if (session.selfId == null) return true
+    const peers = [raw.user_id, raw.target_id, raw.sender.user_id]
+        .filter(value => value != null && String(value) !== String(session.selfId))
+    return peers.every(value => String(value) === String(session.id))
+}
+
+function validateResponse(response: any, id: string, session: QuoteSession) {
+    const raw = response?.data
+    if (response?.status !== 'ok' || Number(response.retcode ?? 0) !== 0 ||
+        !raw || String(raw.message_id) !== id || !raw.sender || raw.time == null ||
+        !Number.isFinite(Number(raw.time)) || !belongsToSession(raw, session)) {
+        throw new QuoteRequestError('unavailable')
+    }
+    return raw
+}
+
 export async function requestQuotedMessage(options: {
     id: string
-    session: { id: string | number; type: string; selfId?: string | number }
+    session: QuoteSession
     action: string
     call: (action: string, params: Record<string, unknown>, timeout: number) => Promise<any>
     normalize: (message: any) => Promise<any[]>
     isActive: () => boolean
-}): Promise<any | null> {
+}): Promise<QuotedMessage | null> {
     if (!options.isActive()) return null
     let response: any
     try {
@@ -33,24 +63,7 @@ export async function requestQuotedMessage(options: {
         throw new QuoteRequestError(error instanceof Error && 'echo' in error ? 'timeout' : 'unavailable')
     }
     if (!options.isActive()) return null
-    const raw = response?.data
-    if (response?.status !== 'ok' || Number(response.retcode ?? 0) !== 0 ||
-        !raw || String(raw.message_id) !== options.id || !raw.sender || !Number.isFinite(Number(raw.time))) {
-        throw new QuoteRequestError('unavailable')
-    }
-    if (raw.message_type && raw.message_type !== (options.session.type === 'group' ? 'group' : 'private')) {
-        throw new QuoteRequestError('unavailable')
-    }
-    if (options.session.type === 'group' && raw.group_id != null && String(raw.group_id) !== String(options.session.id)) {
-        throw new QuoteRequestError('unavailable')
-    }
-    if (options.session.type !== 'group' && options.session.selfId != null) {
-        const peers = [raw.user_id, raw.target_id, raw.sender.user_id]
-            .filter(value => value != null && String(value) !== String(options.session.selfId))
-        if (peers.some(value => String(value) !== String(options.session.id))) {
-            throw new QuoteRequestError('unavailable')
-        }
-    }
+    const raw = validateResponse(response, options.id, options.session)
     const messages = await options.normalize(raw)
     return options.isActive() ? messages[0] : null
 }
@@ -58,8 +71,8 @@ export async function requestQuotedMessage(options: {
 type QuoteJob = {
     id: string
     generation: number
-    resolve: (message: any | null) => void
-    promise: Promise<any | null>
+    resolve: (message: QuotedMessage | null) => void
+    promise: Promise<QuotedMessage | null>
 }
 
 /** A bounded, session-scoped cache. It never inserts results into chat history. */
@@ -67,15 +80,15 @@ export class QuotedMessageLoader {
     readonly entries = new Map<string, QuoteEntry>()
     generation = 0
     private running = 0
-    private queue: QuoteJob[] = []
-    private pending = new Map<string, Promise<any | null>>()
-    private recalledInFlight = new Set<string>()
-    private request: (id: string, isActive: () => boolean) => Promise<any>
-    private changed: () => void
-    private limit: number
+    private readonly queue: QuoteJob[] = []
+    private readonly pending = new Map<string, Promise<QuotedMessage | null>>()
+    private readonly recalledInFlight = new Set<string>()
+    private readonly request: (id: string, isActive: () => boolean) => Promise<QuotedMessage | null>
+    private readonly changed: () => void
+    private readonly limit: number
 
     constructor(
-        request: (id: string, isActive: () => boolean) => Promise<any>,
+        request: (id: string, isActive: () => boolean) => Promise<QuotedMessage | null>,
         changed: () => void = () => {},
         limit = 128,
     ) {
@@ -93,11 +106,11 @@ export class QuotedMessageLoader {
         this.changed()
     }
 
-    load(messageId: string | number, retry = false): Promise<any | null> {
+    load(messageId: string | number, retry = false): Promise<QuotedMessage | null> {
         const id = String(messageId)
         if (!id || id === 'undefined' || id === 'null') return Promise.resolve(null)
         const pending = this.pending.get(id)
-        if (pending) return pending
+        if (pending !== undefined) return pending
         const cached = this.entries.get(id)
         if (cached && (cached.status === 'ready' || !retry)) {
             // Refresh insertion order for LRU eviction.
@@ -106,7 +119,7 @@ export class QuotedMessageLoader {
             return Promise.resolve(cached.message ?? null)
         }
         let resolve!: QuoteJob['resolve']
-        const promise = new Promise<any | null>(done => { resolve = done })
+        const promise = new Promise<QuotedMessage | null>(done => { resolve = done })
         this.pending.set(id, promise)
         this.entries.set(id, { status: 'loading' })
         this.queue.push({ id, generation: this.generation, resolve, promise })
@@ -144,7 +157,7 @@ export class QuotedMessageLoader {
 
     private async run(job: QuoteJob) {
         const isActive = () => job.generation === this.generation
-        let result: any | null = null
+        let result: QuotedMessage | null = null
         try {
             // A queued request may have been recalled before it starts.
             if (this.recalledInFlight.has(job.id) || this.entries.get(job.id)?.message?.revoke) return
@@ -178,7 +191,7 @@ export class QuotedMessageLoader {
 }
 
 /** Retain the existing compact media preview without rendering heavy attachments. */
-export function quotePreviewMessage(message: any): any | null {
+export function quotePreviewMessage(message: QuotedMessage | undefined): QuotedMessage | null {
     if (!message || message.revoke) return null
     const fallbackTypes = new Set(['video', 'record', 'file', 'json', 'xml', 'forward'])
     if (message.message.some((segment: any) => fallbackTypes.has(segment.type))) return null
