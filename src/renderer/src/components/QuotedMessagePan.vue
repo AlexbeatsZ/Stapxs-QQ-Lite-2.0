@@ -73,12 +73,18 @@ watch(() => quotes.viewerId, async (id, previous) => {
     if (quotes.viewerId === id) panel.value?.focus()
 })
 
-function retry() {
-    if (quotes.viewerId !== null) {
-        // The retry button disappears while loading; keep keyboard focus in the dialog.
-        panel.value?.focus()
-        void quotes.load(quotes.viewerId, true)
-    }
+async function retry() {
+    const id = quotes.viewerId
+    if (id === null) return
+    const scope = quotes.scopeVersion
+    const isActive = () => quotes.viewerId === id && quotes.scopeVersion === scope
+    const request = quotes.load(id, true)
+    // Restore focus after Vue removes the retry button, not before that render.
+    await nextTick()
+    if (isActive()) panel.value?.focus()
+    await request
+    await nextTick()
+    if (isActive() && document.activeElement === document.body) panel.value?.focus()
 }
 
 function onKeydown(event: KeyboardEvent) {
