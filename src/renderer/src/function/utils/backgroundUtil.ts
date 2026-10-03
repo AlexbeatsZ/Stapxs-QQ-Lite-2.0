@@ -14,8 +14,10 @@ export interface LocalImageInfo {
     url?: string
 }
 
-export function getBackgroundImageUrl(value: string | null | undefined) {
-    backgroundUrlVersion.value
+export function getBackgroundImageUrl(
+    value: string | null | undefined,
+    _version = backgroundUrlVersion.value,
+) {
     if (!value) return ''
     if (value.startsWith('ssqq-background://')) {
         return objectUrls.get(value) ?? ''

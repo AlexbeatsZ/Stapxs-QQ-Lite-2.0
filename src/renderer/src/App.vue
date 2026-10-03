@@ -75,7 +75,7 @@
                     <font-awesome-icon v-else :icon="['fas', 'pause']"
                         :class="['music-entry-status', { light: tags.currentMusic.coverLight }]" />
                 </li>
-                <li :class="{ 'active': tags.showFileManager }"
+                <li v-if="showFileManagerEntry" :class="{ 'active': tags.showFileManager }"
                     @click="toggleFileManager(undefined)">
                     <font-awesome-icon :icon="['fas', 'arrow-down']" />
                     <span>{{ $t('传输') }}</span>
@@ -97,10 +97,6 @@
                         :class="['music-entry-status', { light: tags.currentMusic.coverLight }]" />
                     <font-awesome-icon v-else :icon="['fas', 'pause']"
                         :class="['music-entry-status', { light: tags.currentMusic.coverLight }]" />
-                </li>
-                <li :class="['file-manager-small', { 'active': tags.showFileManager }]"
-                    @click="toggleFileManager(undefined)">
-                    <font-awesome-icon :icon="['fas', 'arrow-down']" />
                 </li>
             </ul>
             <div :style="{ 'height': get('fs_adaptation') > 0 ? `calc(100% - ${75 + Number(get('fs_adaptation'))}px)` : '' }">
@@ -317,7 +313,7 @@ import * as App from './function/utils/appUtil'
 import anime from 'animejs'
 import packageInfo from '../../../package.json'
 
-import { watch, onMounted, onUnmounted, shallowReactive, shallowRef, provide } from 'vue'
+import { computed, watch, onMounted, onUnmounted, shallowReactive, shallowRef, provide } from 'vue'
 import { Connector, login as loginInfo, loadConnectionHistory, loadConnectionFromHistory, deleteConnectionHistory, decodeStoredToken } from '@renderer/function/connect'
 import { Logger, popList, PopInfo, LogType } from '@renderer/function/base'
 import { setLoginWaveTimer } from '@renderer/function/msg'
@@ -330,6 +326,7 @@ import { useContactStore } from '@renderer/state/contact'
 import { useAuthStore } from '@renderer/state/auth'
 import { Notify } from './function/notify'
 import { updateBaseOnMsgList } from './function/utils/msgUtil'
+import { isActiveTransferStatus } from './function/utils/fileTransferUtil'
 import { getDeviceType, getForegroundToneFromImageUrl } from './function/utils/systemUtil'
 import { uptime, i18n } from '@renderer/main'
 import { backend } from './runtime/backend'
@@ -344,7 +341,7 @@ import Friends from '@renderer/pages/Friends.vue'
 import Messages from '@renderer/pages/Messages.vue'
 import Qzone from '@renderer/pages/Qzone.vue'
 import MusicPlayer, { getCurrentMusic } from './components/MusicPlayer.vue'
-import FileManager, { panelVisible, closePanel } from './components/FileManager.vue'
+import FileManager, { panelVisible, closePanel, getDownloadTasks, getUploadTasks } from './components/FileManager.vue'
 import GlobalSessionSearchBar from './components/GlobalSessionSearchBar.vue'
 import NtViewer from './components/ViewerCom.vue'
 import Tooltips from './components/tooltip/Tooltips.vue'
@@ -368,6 +365,7 @@ const get = Option.get
 const popInfo = new PopInfo()
 const appMsgs = popList
 const loadHistory = App.loadHistory
+const isNarrowLayout = shallowRef(window.innerWidth <= 500)
 
 // 响应式状态
 const connectionStore = useConnectionStore()
@@ -396,8 +394,24 @@ const fps = shallowRef({
     ticks: 0,
     value: 0,
 })
+const hasTransferTasks = computed(() => getDownloadTasks().length > 0 || getUploadTasks().length > 0)
+const hasActiveTransferTasks = computed(() => {
+    return [...getDownloadTasks(), ...getUploadTasks()].some((task) => {
+        return isActiveTransferStatus(task.status)
+    })
+})
+const showFileManagerEntry = computed(() => {
+    if (isNarrowLayout.value) {
+        return hasActiveTransferTasks.value
+    }
+    return hasTransferTasks.value
+})
 
 //#region == 方法函数 ====================================================================
+
+function updateLayoutState() {
+    isNarrowLayout.value = window.innerWidth <= 500
+}
 
 function toggleMusicPlayer(open: boolean | undefined) {
     if(open != undefined ) {
@@ -722,6 +736,7 @@ function changeChat(data: BaseChatInfoElem) {
  * 移除当前的全局弹窗
  */
 function removePopBox() {
+    uiStore.popBoxList[0]?.onClose?.()
     uiStore.popBoxList.shift()
 }
 
@@ -772,6 +787,7 @@ function saveAutoConnect(event: Event) {
  */
 function popQuickClose(allow: boolean | undefined) {
     if (allow != false) {
+        uiStore.popBoxList[0]?.onClose?.()
         uiStore.popBoxList.shift()
     } else {
         const animeBody = document.getElementById('pop-box')
@@ -832,6 +848,8 @@ onMounted(() => {
 
     // 添加全局点击事件监听，用于关闭下拉菜单
     document.addEventListener('click', handleClickOutside)
+    window.addEventListener('resize', updateLayoutState)
+    updateLayoutState()
     refreshCurrentMusic()
     musicSyncTimer = window.setInterval(() => {
         refreshCurrentMusic()
@@ -841,6 +859,11 @@ onMounted(() => {
     watch(() => panelVisible.value, (val) => {
         tags.showFileManager = val
     })
+    watch(showFileManagerEntry, (val) => {
+        if (!val && tags.showFileManager) {
+            toggleFileManager(false)
+        }
+    }, { immediate: true })
 
     // 页面加载完成后
     window.onload = async () => {
@@ -1111,6 +1134,7 @@ onMounted(() => {
 onUnmounted(() => {
     // 移除全局点击事件监听器
     document.removeEventListener('click', handleClickOutside)
+    window.removeEventListener('resize', updateLayoutState)
     if (musicSyncTimer > 0) {
         clearInterval(musicSyncTimer)
         musicSyncTimer = -1
@@ -1215,10 +1239,6 @@ onUnmounted(() => {
     overflow: auto;
 }
 
-.file-manager-small {
-    display: none;
-}
-
 .music-player-float-enter-active,
 .music-player-float-leave-active {
     transition: opacity 0.2s ease, transform 0.2s ease;
@@ -1260,15 +1280,11 @@ onUnmounted(() => {
     .music-entry {
         display: none;
     }
-    .file-manager-small {
-        display: flex !important;
-        margin-bottom: 10px !important;
-    }
 }
 
 @keyframes panelSlideUp {
     from {
-        transform: translate(-50%, -50%) scale(1.1);
+        transform: translate(-50%, -20%) scale(0.95);
         opacity: 0;
     }
 
@@ -1285,7 +1301,7 @@ onUnmounted(() => {
     }
 
     to {
-        transform: translate(-50%, -50%) scale(1.1);
+        transform: translate(-50%, -5%) scale(0.98);
         opacity: 0;
     }
 }

@@ -1,16 +1,11 @@
-import type {
-    UserFriendElem,
-    UserGroupElem,
-} from '../elements/information'
+import type { Session } from '../elements/information'
 
-export type SessionContact = UserFriendElem & UserGroupElem
-
-export function getSessionId(item: SessionContact) {
+export function getSessionId(item: Session) {
     return Number(item.user_id ?? item.group_id)
 }
 
 export function findSessionContact(
-    contacts: SessionContact[],
+    contacts: Session[],
     sessionId: number,
 ) {
     return contacts.find((item) => {
@@ -19,8 +14,8 @@ export function findSessionContact(
 }
 
 export function getMissingGroupPreviewSessions(
-    contacts: SessionContact[],
-    knownSessions: ReadonlyMap<number, SessionContact>,
+    contacts: Session[],
+    knownSessions: ReadonlyMap<number, Session>,
 ) {
     return contacts.filter((item) => {
         const sessionId = getSessionId(item)
@@ -34,7 +29,7 @@ export function getMissingGroupPreviewSessions(
 }
 
 export function resolveIncomingSession(
-    contacts: SessionContact[],
+    contacts: Session[],
     sessionId: number,
     isGroup: boolean,
     senderName?: string,
@@ -47,13 +42,13 @@ export function resolveIncomingSession(
         return {
             group_id: sessionId,
             group_name: String(sessionId),
-        } as SessionContact
+        } as Session
     }
     return {
         user_id: sessionId,
         nickname: senderName || String(sessionId),
         remark: '',
-    } as SessionContact
+    } as Session
 }
 
 const SESSION_STATE_KEYS = [
@@ -66,16 +61,48 @@ const SESSION_STATE_KEYS = [
     'highlight',
 ] as const
 
-export function mergeSessionState(
-    contact: SessionContact,
-    currentSession: SessionContact,
+type SessionStateKey = (typeof SESSION_STATE_KEYS)[number]
+
+function copyDefinedSessionState<K extends SessionStateKey>(
+    contact: Session,
+    currentSession: Session,
+    key: K,
 ) {
-    const contactRecord = contact as unknown as Record<string, unknown>
-    const sessionRecord = currentSession as unknown as Record<string, unknown>
-    SESSION_STATE_KEYS.forEach((key) => {
-        if (sessionRecord[key] !== undefined) {
-            contactRecord[key] = sessionRecord[key]
+    const value = currentSession[key]
+    if (value !== undefined) {
+        contact[key] = value
+    }
+}
+
+export function mergeSessionState(
+    contact: Session,
+    currentSession: Session,
+) {
+    SESSION_STATE_KEYS.forEach((key) =>
+        copyDefinedSessionState(contact, currentSession, key),
+    )
+    return contact
+}
+
+/**
+ * 让真实联系人接管消息早到时创建的占位会话。
+ * 返回 true 表示 Map 中的对象引用已替换，调用方需要重建派生会话列表。
+ */
+export function mergeEarlySessionContacts(
+    contacts: Session[],
+    sessions: Map<number, Session>,
+) {
+    let didMerge = false
+    contacts.forEach((contact) => {
+        const sessionId = getSessionId(contact)
+        const currentSession = sessions.get(sessionId)
+        if (currentSession && currentSession !== contact) {
+            sessions.set(
+                sessionId,
+                mergeSessionState(contact, currentSession),
+            )
+            didMerge = true
         }
     })
-    return contact
+    return didMerge
 }

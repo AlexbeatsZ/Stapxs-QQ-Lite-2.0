@@ -88,11 +88,15 @@
                         <div :class="checkDefault('theme_color')" />
                         <font-awesome-icon :icon="['fas', 'palette']" />
                         <div>
-                            <label for="theme_color_custom">{{ $t('主题色') }}</label>
+                            <label for="theme_color_custom" @click.prevent="themeColorChange">{{ $t('主题色') }}</label>
                             <span>{{ $t('换个心情 🎵 ~') }}</span>
                         </div>
                         <div class="theme-color-col">
-                            <input id="theme_color_custom" v-model="themeColorRaw" type="color">
+                            <input id="theme_color_custom"
+                                v-model="themeColorRaw"
+                                type="text"
+                                readonly
+                                @click.prevent="themeColorChange">
                             <label class="ss-radio" style="margin-left: 10px;">
                                 <input type="radio" name="theme_color"
                                     :checked="Number(settingsStore.sysConfig.theme_color) > 10"
@@ -444,8 +448,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, toRaw, onMounted, useTemplateRef } from 'vue'
-import Option, { runASWEvent as save, checkDefault, runAS } from '../../function/option'
+import { markRaw, onMounted, ref, toRaw, useTemplateRef, watch } from 'vue'
+import Option, { run, runASWEvent as save, checkDefault, runAS } from '../../function/option'
 import { BrowserInfo, detect } from 'detect-browser'
 import { getDeviceType } from '@renderer/function/utils/systemUtil'
 
@@ -461,6 +465,7 @@ import {
 import { i18n } from '@renderer/main'
 import { useSettingsStore } from '@renderer/state/settings'
 import { useUIStore } from '@renderer/state/ui'
+import ThemeColorPickerPan from '@renderer/components/ThemeColorPickerPan.vue'
 
 const settingsStore = useSettingsStore()
 const uiStore = useUIStore()
@@ -484,11 +489,17 @@ const initialScaleShow = ref(0.5)
 const fsAdaptationShow = ref(0)
 const usedIcon = ref('')
 const themeColorRaw = ref('')
+const themeColorDraft = ref('')
+const themeColorHistory = ref<string[]>([])
+
+const THEME_COLOR_HISTORY_KEY = 'theme_color_history'
+const THEME_COLOR_HISTORY_LIMIT = 12
 
 const choiceImgRef = useTemplateRef<HTMLInputElement>('choiceImgRef')
 
 onMounted(() => {
-    themeColorRaw.value = '#' + ('000000' + Number((settingsStore.sysConfig.theme_color || 0)).toString(16)).slice(-6)
+    themeColorRaw.value = getThemeColorRawValue()
+    themeColorHistory.value = loadThemeColorHistory()
     // 一次性初始化一次缩放级别
     const unwatch = watch(
         () => settingsStore.sysConfig,
@@ -510,6 +521,13 @@ onMounted(() => {
         })
         Onebot.getUsedIcon()
     }
+
+    watch(
+        () => settingsStore.sysConfig.theme_color,
+        () => {
+            themeColorRaw.value = getThemeColorRawValue()
+        },
+    )
 })
 
 function gaLanguage(event: Event) {
@@ -529,18 +547,150 @@ function gaColor(event: Event) {
 
 function themeColorChange(event: Event) {
     event.preventDefault()
+    const originThemeColorValue = Number(settingsStore.sysConfig.theme_color ?? 0)
+    themeColorDraft.value = getThemeColorRawValue()
+    uiStore.popBoxList.push({
+        title: $t('主题色'),
+        allowQuickClose: true,
+        onClose: () => {
+            restoreThemeColor(originThemeColorValue)
+        },
+        template: markRaw(ThemeColorPickerPan),
+        templateValue: {
+            modelValue: themeColorDraft.value,
+            onChange: (value: string) => {
+                themeColorDraft.value = normalizeHexColor(value)
+                run('theme_color', parseInt(themeColorDraft.value.slice(1), 16))
+            },
+            historyColors: themeColorHistory.value,
+        },
+        button: [
+            {
+                text: $t('取消'),
+                fun: () => {
+                    restoreThemeColor(originThemeColorValue)
+                    uiStore.popBoxList[0].onClose = undefined
+                    uiStore.popBoxList.shift()
+                },
+            },
+            {
+                text: $t('确认'),
+                master: true,
+                fun: () => {
+                    const saveColor = normalizeHexColor(themeColorDraft.value)
+                    themeColorRaw.value = saveColor
+                    themeColorHistory.value = saveThemeColorHistory(saveColor)
+                    uiStore.popBoxList[0].onClose = undefined
+                    runAS('theme_color', parseInt(saveColor.slice(1), 16))
+                    uiStore.popBoxList.shift()
+                },
+            },
+        ],
+    })
+}
 
-    const colorInput = document.getElementById(
-        'theme_color_custom',
-    ) as HTMLInputElement
-    if (colorInput) {
-        colorInput.click()
-        colorInput.onchange = (e) => {
-            const value = (e.target as HTMLInputElement).value
-            const saveValue = parseInt(value.replace('#', ''), 16)
-            runAS('theme_color', saveValue)
-        }
+function getThemeColorRawValue() {
+    const currentValue = Number(settingsStore.sysConfig.theme_color ?? 0)
+    if (currentValue > 10) {
+        return '#' + ('000000' + currentValue.toString(16)).slice(-6).toUpperCase()
     }
+    const cssColor = getComputedStyle(document.documentElement)
+        .getPropertyValue('--color-main')
+    return cssColorToHex(cssColor)
+}
+
+function restoreThemeColor(themeColorValue: number) {
+    run('theme_color', themeColorValue)
+    themeColorRaw.value = getThemeColorRawValue()
+}
+
+function loadThemeColorHistory() {
+    const cookieValue = getCookie(THEME_COLOR_HISTORY_KEY)
+    let storageValue = null as string | null
+    try {
+        storageValue = globalThis.localStorage?.getItem(THEME_COLOR_HISTORY_KEY) ?? null
+    } catch {
+        // ignore
+    }
+    const source = cookieValue ?? storageValue
+    if (!source) {
+        return []
+    }
+    try {
+        const parsed = JSON.parse(source)
+        if (!Array.isArray(parsed)) {
+            return []
+        }
+        return parsed
+            .map((item) => normalizeHexColor(String(item)))
+            .filter((item, index, list) => list.indexOf(item) === index)
+            .slice(0, THEME_COLOR_HISTORY_LIMIT)
+    } catch {
+        return []
+    }
+}
+
+function saveThemeColorHistory(color: string) {
+    const normalized = normalizeHexColor(color)
+    const nextHistory = [
+        normalized,
+        ...themeColorHistory.value.filter((item) => item !== normalized),
+    ].slice(0, THEME_COLOR_HISTORY_LIMIT)
+    const serialized = JSON.stringify(nextHistory)
+    setCookie(THEME_COLOR_HISTORY_KEY, serialized, 3650)
+    try {
+        globalThis.localStorage?.setItem(THEME_COLOR_HISTORY_KEY, serialized)
+    } catch {
+        // ignore
+    }
+    return nextHistory
+}
+
+function getCookie(name: string) {
+    if (typeof document === 'undefined') {
+        return null
+    }
+    const prefix = `${name}=`
+    const cookie = document.cookie
+        .split('; ')
+        .find((item) => item.startsWith(prefix))
+    return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : null
+}
+
+function setCookie(name: string, value: string, days: number) {
+    if (typeof document === 'undefined') {
+        return
+    }
+    const expires = new Date()
+    expires.setDate(expires.getDate() + days)
+    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`
+}
+
+function cssColorToHex(color: string) {
+    const value = color.trim()
+    if (value.startsWith('#')) {
+        return normalizeHexColor(value)
+    }
+    const match = value.match(/^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/i)
+    if (!match) {
+        return '#FFFFFF'
+    }
+    return '#' + match.slice(1, 4).map((item) => {
+        return Number(item).toString(16).padStart(2, '0')
+    }).join('').toUpperCase()
+}
+
+function normalizeHexColor(color: string | undefined) {
+    const value = (color ?? '').trim()
+    const match = value.match(/^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)
+    if (!match) {
+        return '#FFFFFF'
+    }
+    const hex = match[1]
+    if (hex.length === 3) {
+        return '#' + hex.split('').map((item) => item + item).join('').toUpperCase()
+    }
+    return '#' + hex.toUpperCase()
 }
 
 function blurTip(event: Event) {
