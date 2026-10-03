@@ -198,6 +198,12 @@ file_download:
     source: $.data
     list:
         file_url: /url
+# 分块上传文件，避免将大文件作为一条 Base64 WebSocket 消息发送
+file_upload_stream:
+    name: upload_file_stream
+    group_name: upload_group_file
+    private_name: upload_private_file
+    chunk_size: 4194304
 
 ## 群操作
 # 退出群聊
