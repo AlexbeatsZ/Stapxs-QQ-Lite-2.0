@@ -1717,115 +1717,71 @@ export async function appendHistoryForQuotedMessage(msg: any, isActive: () => bo
 
 async function saveMsg(msg: any, append = undefined as undefined | string, isActive = () => true, keepExisting = false) {
     if (!isActive()) return
+    let list = await normalizeMessagesFromPayload(msg)
+    if (!isActive() || list == undefined || !isSavedMessageForCurrentChat(list)) return
     const uiStore = useUIStore()
     const authStore = useAuthStore()
     const chatStore = useChatStore()
-    const contactStore = useContactStore()
-    const settingsStore = useSettingsStore()
-    let list = await normalizeMessagesFromPayload(msg)
-    if (!isActive()) return
-    if (list != undefined) {
-        const historyBeforeTime = Number(uiStore.historyBeforeTime)
-        const hasHistoryBeforeTime = Number.isFinite(historyBeforeTime)
-
-        // 检查消息是否是当前聊天的消息
-        const firstMsg = list[0]
-        const infoList = getMsgData(
-            'message_info',
-            firstMsg,
-            msgPath.message_info,
-        )
-        if (infoList != undefined) {
-            const info = infoList[0]
-            const id = info.group_id ?? info.private_id
-            if (id != undefined && id != chatStore.chatInfo.show.id) {
-                return
-            }
-        }
-        // 将消息中 message 字段为空数组的消息过滤掉
-        list = list.filter((item: any) => {
-            return item.message.length > 0
-        })
-
-        // 上拉历史时按时间戳作为边界（兼容增量/全量两种分页模式）。
-        if (hasHistoryBeforeTime && append === 'top') {
-            list = list.filter((item: any) => {
-                const t = Number(item?.time)
-                return Number.isFinite(t) && t <= historyBeforeTime
-            })
-        }
-
-        // 处于上拉边界过滤时，若结果为空则保留当前列表，避免误清空。
-        if (hasHistoryBeforeTime && append === 'top' && list.length < 1) {
-            uiStore.historyBeforeTime = undefined
-            uiStore.nowGetHistory = false
-            return
-        }
-
-        // 保存到本地历史
-        saveMessagesWithSideEffects(authStore.loginInfo.uin, list)
-        // 如果分页不是增量的，就不使用追加
-        if (
-            append == 'top' &&
-            !keepExisting &&
-            authStore.jsonMap.message_list?.pagerType == 'full'
-        ) {
-            append = undefined
-        }
-        // 追加处理
-        if (append != undefined) {
-            // 没有更旧的消息能加载了，禁用允许加载标志
-            if (list.length < 1) {
-                uiStore.canLoadHistory = false
-                uiStore.historyBeforeTime = undefined
-                return
-            }
-            const merged = mergeMessagesByIdAndTime(chatStore.messageList, list)
-            replaceMessageListInPlace(merged)
-        } else {
-            if (
-                settingsStore.sysConfig.enable_local_history &&
-                settingsStore.sysConfig.mixed_load_messages !== false
-            ) {
-                const merged = mergeMessagesByIdAndTime(chatStore.messageList, list)
-                replaceMessageListInPlace(merged)
-            } else {
-                replaceMessageListInPlace(list)
-            }
-        }
-        // 消息后处理
-        // PS: 部分消息类型可能需要获取附加内容，在此处进行处理
-        chatStore.messageList.forEach((item) => {
-            sendMsgAppendInfo(item)
-        })
-        // 将最新消息同步到会话列表；通过会话 Map 更新以触发 shallowRef 列表刷新。
-        const lastMsg =
-            chatStore.messageList[chatStore.messageList.length - 1]
-        if (lastMsg) {
-            const user = contactStore.userList.find((item) => {
-                return (
-                    item.group_id == chatStore.chatInfo.show.id ||
-                    item.user_id == chatStore.chatInfo.show.id
-                )
-            })
-            const sessionId = Number(chatStore.chatInfo.show.id)
-            const session = contactStore.baseOnMsgList.get(sessionId) ?? user
-            if (session) {
-                const preview = formatMessageData(
-                    lastMsg,
-                    chatStore.chatInfo.show.type == 'group',
-                )
-                if (user) Object.assign(user, preview)
-                Object.assign(session, preview)
-                contactStore.baseOnMsgList.set(sessionId, session)
-                updateBaseOnMsgList()
-            }
-        }
-
-        if (hasHistoryBeforeTime) {
-            uiStore.historyBeforeTime = undefined
-        }
+    const beforeTime = Number(uiStore.historyBeforeTime)
+    const hasBoundary = Number.isFinite(beforeTime)
+    list = filterSavedHistory(list, append, beforeTime)
+    if (hasBoundary && append === 'top' && list.length === 0) {
+        uiStore.historyBeforeTime = undefined
+        uiStore.nowGetHistory = false
+        return
     }
+    saveMessagesWithSideEffects(authStore.loginInfo.uin, list)
+    if (!applySavedMessages(list, append, keepExisting)) return
+    chatStore.messageList.forEach(item => sendMsgAppendInfo(item))
+    updateSavedHistoryPreview()
+    if (hasBoundary) uiStore.historyBeforeTime = undefined
+}
+
+function isSavedMessageForCurrentChat(list: any[]): boolean {
+    const infoList = getMsgData('message_info', list[0], msgPath.message_info)
+    const info = infoList?.[0]
+    const id = info?.group_id ?? info?.private_id
+    return id == null || String(id) === String(useChatStore().chatInfo.show.id)
+}
+
+function filterSavedHistory(list: any[], append: string | undefined, beforeTime: number): any[] {
+    const messages = list.filter(item => item.message.length > 0)
+    if (append !== 'top' || !Number.isFinite(beforeTime)) return messages
+    return messages.filter(item => Number.isFinite(Number(item.time)) && Number(item.time) <= beforeTime)
+}
+
+function applySavedMessages(list: any[], append: string | undefined, keepExisting: boolean): boolean {
+    const uiStore = useUIStore()
+    const authStore = useAuthStore()
+    const chatStore = useChatStore()
+    const settings = useSettingsStore().sysConfig
+    const replaceFullPage = append === 'top' && !keepExisting && authStore.jsonMap.message_list?.pagerType === 'full'
+    const isAppend = append !== undefined && !replaceFullPage
+    if (isAppend && list.length === 0) {
+        uiStore.canLoadHistory = false
+        uiStore.historyBeforeTime = undefined
+        return false
+    }
+    const mixed = settings.enable_local_history && settings.mixed_load_messages !== false
+    const messages = isAppend || mixed ? mergeMessagesByIdAndTime(chatStore.messageList, list) : list
+    replaceMessageListInPlace(messages)
+    return true
+}
+
+function updateSavedHistoryPreview() {
+    const chatStore = useChatStore()
+    const contactStore = useContactStore()
+    const last = chatStore.messageList[chatStore.messageList.length - 1]
+    if (!last) return
+    const user = contactStore.userList.find(item => item.group_id == chatStore.chatInfo.show.id || item.user_id == chatStore.chatInfo.show.id)
+    const sessionId = Number(chatStore.chatInfo.show.id)
+    const session = contactStore.baseOnMsgList.get(sessionId) ?? user
+    if (!session) return
+    const preview = formatMessageData(last, chatStore.chatInfo.show.type === 'group')
+    if (user) Object.assign(user, preview)
+    Object.assign(session, preview)
+    contactStore.baseOnMsgList.set(sessionId, session)
+    updateBaseOnMsgList()
 }
 
 async function normalizeMessagesFromPayload(payload: any): Promise<any[] | undefined> {

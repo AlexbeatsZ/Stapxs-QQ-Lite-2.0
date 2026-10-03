@@ -7,7 +7,7 @@ const response = messages => ({ status: 'ok', retcode: 0, data: { messages } })
 
 test('quote navigation uses mapped group/private paging and the full-page count convention', async () => {
     for (const type of ['group', 'private']) {
-        const r = createQuotedHistoryRuntime()
+        const r = await createQuotedHistoryRuntime()
         r.chat.chatInfo.show.type = type
         r.chat.messageList.push(message(21), message(22))
         r.auth.jsonMap.message_list.pagerType = 'full'
@@ -25,7 +25,7 @@ test('quote navigation uses mapped group/private paging and the full-page count 
 })
 
 test('incremental quote pages use the existing ordered deduplicating merge', async () => {
-    const r = createQuotedHistoryRuntime()
+    const r = await createQuotedHistoryRuntime()
     r.chat.messageList.push(message(21), message(22))
     r.runtime.response = response([message(21), message(1), message(2)])
     await r.api.loadMoreHistory({ isActive: () => true })
@@ -34,7 +34,7 @@ test('incremental quote pages use the existing ordered deduplicating merge', asy
 })
 
 test('quote navigation retains previously read messages when a full-page adapter returns an older window', async () => {
-    const r = createQuotedHistoryRuntime()
+    const r = await createQuotedHistoryRuntime()
     r.chat.messageList.push(message(21), message(22))
     r.auth.jsonMap.message_list.pagerType = 'full'
     r.runtime.response = response([message(1), message(2)])
@@ -43,7 +43,7 @@ test('quote navigation retains previously read messages when a full-page adapter
 })
 
 test('a late network response does not change the new chat or its loading state', async () => {
-    const r = createQuotedHistoryRuntime()
+    const r = await createQuotedHistoryRuntime()
     r.chat.messageList.push(message(21))
     let done, active = true
     r.runtime.Connector.callRawApi = () => new Promise(resolve => { done = resolve })
@@ -59,7 +59,7 @@ test('a late network response does not change the new chat or its loading state'
 })
 
 test('ownership is checked after delayed history normalization and before persistence', async () => {
-    const r = createQuotedHistoryRuntime()
+    const r = await createQuotedHistoryRuntime()
     r.chat.messageList.push(message(21))
     let done, active = true
     r.runtime.normalizeMessagesFromPayload = () => new Promise(resolve => { done = resolve })
@@ -72,7 +72,7 @@ test('ownership is checked after delayed history normalization and before persis
 })
 
 test('history failure releases navigation loading and preserves the current messages', async () => {
-    const r = createQuotedHistoryRuntime()
+    const r = await createQuotedHistoryRuntime()
     r.chat.messageList.push(message(21))
     r.runtime.response = { status: 'failed', retcode: 100, data: null }
     assert.equal(await r.api.loadMoreHistory({ isActive: () => true }), false)
@@ -82,7 +82,7 @@ test('history failure releases navigation loading and preserves the current mess
 })
 
 test('manual paging keeps its existing callback rather than starting quote navigation', async () => {
-    const r = createQuotedHistoryRuntime()
+    const r = await createQuotedHistoryRuntime()
     r.chat.messageList.push(message(21))
     await r.api.loadMoreHistory()
     assert.equal(r.calls.length, 1)

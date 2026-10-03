@@ -1065,82 +1065,61 @@ function chatScroll(event: Event, pass: boolean) {
 }
 
 async function loadMoreHistory(reply?: { isActive: () => boolean }) {
-    if (
-        !uiStore.nowGetHistory &&
-        uiStore.canLoadHistory !== false && list.length > 0
-    ) {
-        const firstMsgId = list[0].message_id
-        const firstMsgTime = Number(list[0]?.time)
-        const useMixedHistory =
-            settingsStore.sysConfig.enable_local_history &&
-            settingsStore.sysConfig.mixed_load_messages !== false
-        uiStore.nowGetHistory = true
-        if (useMixedHistory && Number.isFinite(firstMsgTime)) {
-            uiStore.historyBeforeTime = firstMsgTime
-        } else {
-            uiStore.historyBeforeTime = undefined
-        }
-        uiStore.loadHistoryFail = false
-
-        // Quote navigation pages from the network boundary. Local gap-fill callbacks
-        // are independent of this navigation and must not outlive its ownership.
-        if (useMixedHistory && !reply) {
-            let localMsgs = [] as any[]
-            if (Number.isFinite(firstMsgTime)) {
-                localMsgs = await dbGetBeforeByTime(
-                    authStore.loginInfo.uin,
-                    chatStore.chatInfo.show.id,
-                    firstMsgTime,
-                    20,
-                )
-            } else {
-                localMsgs = await dbGetBefore(
-                    authStore.loginInfo.uin,
-                    chatStore.chatInfo.show.id,
-                    firstMsgId,
-                    20,
-                )
-            }
-            if (localMsgs.length > 0) {
-                const existingIds = new Set(chatStore.messageList.map((m) => String(m.message_id ?? '')))
-                const addList = localMsgs.filter((m) => {
-                    const msgId = String(m?.message_id ?? '')
-                    return msgId.length === 0 || !existingIds.has(msgId)
-                })
-                if (addList.length > 0) {
-                    chatStore.messageList.splice(0, 0, ...addList)
-                }
-                const boundary = list[addList.length] ?? list[addList.length - 1]
-                const seqGapAnchors = detectSeqGaps([...addList, boundary])
-                if (seqGapAnchors.length > 0) {
-                    fillSeqGaps(seqGapAnchors)
-                }
-            }
-        }
-
-        const fullPage =
-            authStore.jsonMap.message_list?.pagerType == 'full'
-        const type = chatStore.chatInfo.show.type
-        const id = chatStore.chatInfo.show.id
-        let name
-        if (authStore.jsonMap.message_list && type != 'group') {
-            name = authStore.jsonMap.message_list.private_name
-        } else {
-            name = authStore.jsonMap.message_list.name
-        }
-        const params = {
-            group_id: type == 'group' ? id : undefined,
-            user_id: type != 'group' ? id : undefined,
-            message_id: firstMsgId,
-            count: fullPage ? chatStore.messageList.length + 20 : 20,
-        }
-        if (!reply) {
-            Connector.send(name ?? 'get_chat_history', params, 'getChatHistory')
-            return true
-        }
-        return requestQuotedHistoryPage(name ?? 'get_chat_history', params, reply.isActive)
+    if (uiStore.nowGetHistory || uiStore.canLoadHistory === false || list.length === 0) return false
+    const firstMsgId = list[0].message_id
+    const firstMsgTime = Number(list[0]?.time)
+    const useMixedHistory =
+        settingsStore.sysConfig.enable_local_history &&
+        settingsStore.sysConfig.mixed_load_messages !== false
+    uiStore.nowGetHistory = true
+    if (useMixedHistory && Number.isFinite(firstMsgTime)) {
+        uiStore.historyBeforeTime = firstMsgTime
+    } else {
+        uiStore.historyBeforeTime = undefined
     }
-    return false
+    uiStore.loadHistoryFail = false
+
+    // Quote navigation pages from the network boundary. Local gap-fill callbacks
+    // are independent of this navigation and must not outlive its ownership.
+    if (useMixedHistory && !reply) await loadLocalOlderHistory(firstMsgId, firstMsgTime)
+
+    const fullPage =
+        authStore.jsonMap.message_list?.pagerType == 'full'
+    const type = chatStore.chatInfo.show.type
+    const id = chatStore.chatInfo.show.id
+    let name
+    if (authStore.jsonMap.message_list && type != 'group') {
+        name = authStore.jsonMap.message_list.private_name
+    } else {
+        name = authStore.jsonMap.message_list.name
+    }
+    const params = {
+        group_id: type == 'group' ? id : undefined,
+        user_id: type != 'group' ? id : undefined,
+        message_id: firstMsgId,
+        count: fullPage ? chatStore.messageList.length + 20 : 20,
+    }
+    if (!reply) {
+        Connector.send(name ?? 'get_chat_history', params, 'getChatHistory')
+        return true
+    }
+    return requestQuotedHistoryPage(name ?? 'get_chat_history', params, reply.isActive)
+}
+
+async function loadLocalOlderHistory(firstMsgId: string | number, firstMsgTime: number) {
+    const local = Number.isFinite(firstMsgTime)
+        ? await dbGetBeforeByTime(authStore.loginInfo.uin, chatStore.chatInfo.show.id, firstMsgTime, 20)
+        : await dbGetBefore(authStore.loginInfo.uin, chatStore.chatInfo.show.id, String(firstMsgId), 20)
+    if (local.length === 0) return
+    const existingIds = new Set(chatStore.messageList.map(message => String(message.message_id ?? '')))
+    const added = local.filter(message => {
+        const id = String(message?.message_id ?? '')
+        return id.length === 0 || !existingIds.has(id)
+    })
+    if (added.length > 0) chatStore.messageList.splice(0, 0, ...added)
+    const boundary = list[added.length] ?? list[added.length - 1]
+    const gaps = detectSeqGaps([...added, boundary])
+    if (gaps.length > 0) fillSeqGaps(gaps)
 }
 
 async function requestQuotedHistoryPage(action: string, params: Record<string, unknown>, isActive: () => boolean) {

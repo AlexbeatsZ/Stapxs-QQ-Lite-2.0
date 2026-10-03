@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { runInNewContext } from 'node:vm'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, unlinkSync, rmdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import ts from 'typescript'
 
 // Execute the actual history adapter/application bodies without starting the app.
@@ -13,7 +15,7 @@ function functionSource(file, name) {
     return node.getText(source).replace(/^export\s+/, '')
 }
 
-export function createQuotedHistoryRuntime() {
+export async function createQuotedHistoryRuntime() {
     const chat = { chatInfo: { show: { id: 10, type: 'group' } }, messageList: [] }
     const ui = { nowGetHistory: false, canLoadHistory: true, loadHistoryFail: false }
     const auth = { loginInfo: { uin: 99 }, jsonMap: { message_list: { name: 'group_history', private_name: 'private_history' } } }
@@ -40,10 +42,11 @@ export function createQuotedHistoryRuntime() {
     }
     const msgFile = 'src/renderer/src/function/msg.ts'
     const chatFile = 'src/renderer/src/pages/Chat.vue'
-    const names = ['loadMoreHistory', 'requestQuotedHistoryPage', 'detectSeqGaps', 'fillSeqGaps']
+    const names = ['loadMoreHistory', 'loadLocalOlderHistory', 'requestQuotedHistoryPage', 'detectSeqGaps', 'fillSeqGaps']
     const bodies = [
         ...names.map(name => functionSource(chatFile, name)),
-        ...['saveMsg', 'appendHistoryForQuotedMessage', 'mergeMessagesByIdAndTime', 'replaceMessageListInPlace',
+        ...['saveMsg', 'isSavedMessageForCurrentChat', 'filterSavedHistory', 'applySavedMessages', 'updateSavedHistoryPreview',
+            'appendHistoryForQuotedMessage', 'mergeMessagesByIdAndTime', 'replaceMessageListInPlace',
             'normalizeMessageId', 'getMessageTimestamp', 'buildFallbackMessageKey', 'compareMessageOrder',
             'getImageSegments', 'hasImageMessage', 'hasResolvableImageSource', 'shouldReplaceDuplicateMessage']
             .map(name => functionSource(msgFile, name)),
@@ -53,7 +56,18 @@ export function createQuotedHistoryRuntime() {
         ${bodies.join('\n')}
         return { loadMoreHistory, appendHistoryForQuotedMessage }
     }`
-    const compiled = ts.transpileModule(`(${code})`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
-    const api = runInNewContext(compiled)(runtime)
+    const compiled = ts.transpileModule(`export default ${code}`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
+    const base = path.join(tmpdir(), '.agents')
+    mkdirSync(base, { recursive: true })
+    const folder = mkdtempSync(path.join(base, 'quoted-history-'))
+    const file = path.join(folder, 'runtime.mjs')
+    let api
+    try {
+        writeFileSync(file, compiled)
+        api = (await import(pathToFileURL(file).href)).default(runtime)
+    } finally {
+        unlinkSync(file)
+        rmdirSync(folder)
+    }
     return { api, runtime, chat, ui, auth, settings, calls, saved, errors }
 }
