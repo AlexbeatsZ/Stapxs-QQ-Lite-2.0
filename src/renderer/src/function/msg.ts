@@ -68,6 +68,7 @@ import { ensurePinyinLoaded, getPinyin, isPinyinReady } from './utils/pinyin'
 import { useAuthStore } from '@renderer/state/auth'
 import { useContactStore } from '@renderer/state/contact'
 import { useChatStore } from '@renderer/state/chat'
+import { useQuotedMessagesStore } from '@renderer/state/quotedMessages'
 import { useConnectionStore } from '@renderer/state/connection'
 import { useStickerStore } from '@renderer/state/sticker'
 import { useUIStore } from '@renderer/state/ui'
@@ -2123,6 +2124,10 @@ function revokeMsg(_: string, msg: any) {
     // 在本地 DB 中标记撤回
     const msgId = msg.message_id
     dbRevokeMessage(authStore.loginInfo.uin, String(msgId))
+    if (String(chatId) === String(chatStore.chatInfo.show.id) &&
+        msg.notice_type.includes('group') === (chatStore.chatInfo.show.type === 'group')) {
+        useQuotedMessagesStore().revoke(msgId)
+    }
 
     // 寻找消息
     let msgGet = null as { [key: string]: any } | null
