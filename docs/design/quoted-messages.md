@@ -59,6 +59,15 @@ the active conversation because their source chat is unknown.
   header. Keep programmatic positioning just above the zero-scroll paging
   threshold so the final jump cannot launch a normal full-page replacement.
   Other callers retain their existing scroll position.
+- A quote jump keeps the actual original anchored inside the visible area between
+  the header and composer. Use current viewport rectangles rather than a cached
+  offset; delayed images, quote previews and viewport resizing change layout after
+  Vue's nextTick. Resize/load/transition events re-align that same element and
+  scope, with immediate scrolling so a long smooth animation cannot be interrupted.
+  While paging or anchored, image-load callbacks must not add every image's height
+  to scrollTop: images below the original would move it off screen. Manual wheel,
+  touch, pointer or scroll-key input releases the anchor. A new jump, chat scope
+  change or unmount releases its observer, events and queued animation frame.
 
 ## Verification
 
@@ -69,3 +78,5 @@ show an unloaded original in the inline quote, click once, load all required
 pages and highlight the original in the main timeline without a dialog. Also
 cover an already loaded original, end-of-history and switching chats during a
 delayed page. Real logged-in QQ/NapCat acceptance remains separate from mocks.
+Long-distance acceptance must also include delayed images both above and below
+the original, a target whose height changes and manual scrolling after a jump.

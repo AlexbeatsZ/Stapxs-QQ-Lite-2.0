@@ -611,6 +611,7 @@ import { Logger, LogType, PopInfo, PopType } from '@renderer/function/base'
 import { Connector } from '@renderer/function/connect'
 import { appendHistoryForQuotedMessage } from '@renderer/function/msg'
 import { loadHistoryToQuotedMessage } from '@renderer/function/utils/quotedMessage'
+import { keepQuotedMessageInView } from '@renderer/function/utils/quotedScroll'
 import { useQuotedMessagesStore } from '@renderer/state/quotedMessages'
 import {
     BaseChatInfoElem,
@@ -666,9 +667,11 @@ const contactStore = useContactStore()
 const quotedMessages = useQuotedMessagesStore()
 const replyLoading = ref(false)
 let replyJump = 0
+let replyAnchor: ReturnType<typeof keepQuotedMessageInView> | undefined
 
 function cancelReplyJump() {
     replyJump++
+    replyAnchor?.stop()
     if (!replyLoading.value) return
     replyLoading.value = false
     uiStore.nowGetHistory = false
@@ -1161,12 +1164,13 @@ async function waitForHistoryIdle(isActive: () => boolean): Promise<boolean> {
 
 async function jumpToQuotedMessage(messageId: string) {
     cancelReplyJump()
-    if (scrollToMsg(messageId, true, true, true)) return
     const pan = document.getElementById('msgPan')
-    if (!pan || !quotedMessages.canRequest) return
+    if (!pan) return
     const jump = replyJump
     const scope = quotedMessages.scopeVersion
     const isActive = () => jump === replyJump && scope === quotedMessages.scopeVersion && pan.isConnected
+    if (focusQuotedMessage(messageId, pan, isActive)) return
+    if (!quotedMessages.canRequest) return
     replyLoading.value = true
     tags.value.showBottomButton = true
     try {
@@ -1183,11 +1187,24 @@ async function jumpToQuotedMessage(messageId: string) {
             rendered: async () => { await nextTick() },
         })
         if (!isActive()) return
-        if (result === 'found') scrollToMsg(messageId, true, true, true)
+        if (result === 'found') focusQuotedMessage(messageId, pan, isActive)
         else if (result === 'unavailable') new PopInfo().add(PopType.INFO, $t('无法定位上下文'))
     } finally {
         if (isActive()) replyLoading.value = false
     }
+}
+
+function focusQuotedMessage(messageId: string, pan: HTMLElement, isActive: () => boolean): boolean {
+    const target = document.getElementById(messageId)
+    if (!target || !pan.contains(target) || !isActive()) return false
+    tags.value.showBottomButton = true
+    // Finish a long jump immediately; media layout changes must not interrupt it.
+    scrollToMsg(messageId, false, true, true)
+    replyAnchor = keepQuotedMessageInView({
+        pan, target, isActive,
+        onRelease: () => { replyAnchor = undefined },
+    })
+    return true
 }
 
 function detectSeqGaps(msgs: any[]): string[] {
@@ -1253,6 +1270,7 @@ function scrollToMsgLocal(message_id: string) {
 }
 
 function imgLoadedScroll(height: number) {
+    if (replyLoading.value || replyAnchor?.correct()) return
     const pan = document.getElementById('msgPan')
     if(pan) {
         if(list.length <= 20 && !tags.value.showBottomButton && !replyLoading.value) {
