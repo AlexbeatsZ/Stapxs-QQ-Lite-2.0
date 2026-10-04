@@ -1,3 +1,4 @@
+import { expandEmptyHistoryPage, isEmptyHistoryPage } from './utils/emptyHistory'
 /*
  * @FileDescription: 消息处理模块
  * @Author: Stapxs
@@ -655,13 +656,12 @@ function handleChatHistoryResponse(
 
     if (!appendToTop) {
         // 无论是否有本地预填充，都以网络数据替换（保证最新消息不遗漏）
-        saveMsg(msg, undefined, requestGeneration).catch(onError)
-        return
+        return saveMsg(msg, undefined, requestGeneration, isActiveRequest, false, true).catch(onError)
     }
 
     const pan = document.getElementById('msgPan')
     const oldScrollHeight = pan?.scrollHeight ?? 0
-    saveMsg(msg, 'top', requestGeneration).then(() => {
+    return saveMsg(msg, 'top', requestGeneration).then(() => {
         if (!pan || !isActiveRequest()) return
         nextTick(() => {
             setTimeout(() => {
@@ -927,7 +927,7 @@ const msgFunctions = {
      * 保存聊天记录
      */
     getChatHistoryFist: (_: string, msg: { [key: string]: any }, echoList?: string[]) => {
-        handleChatHistoryResponse(msg, echoList)
+        return handleChatHistoryResponse(msg, echoList)
     },
     getChatHistoryGapFill: (
         _: string,
@@ -1819,6 +1819,7 @@ async function saveMsg(
     requestGeneration?: number,
     isActive = () => true,
     keepExisting = false,
+    expandEmpty = false,
 ) {
     if (!isActive()) return
     const uiStore = useUIStore()
@@ -1828,13 +1829,15 @@ async function saveMsg(
         id: chatStore.chatInfo.show.id,
         type: chatStore.chatInfo.show.type,
     }
-    let list = await normalizeMessagesFromPayload(msg)
+    let list = await normalizeMessagesFromPayload(msg, expandEmpty, () =>
+        isActive() && isCurrentMessageSession(expectedSession, requestGeneration),
+    )
     if (!isActive() || !isCurrentMessageSession(expectedSession, requestGeneration) || list === undefined) return
     if (!isMessageListForCurrentSession(list)) return
 
     const historyBeforeTime = Number(uiStore.historyBeforeTime)
     const hasHistoryBeforeTime = Number.isFinite(historyBeforeTime)
-    list = list.filter((item: any) => item.message.length > 0)
+    // Empty records still occupy server pagination slots and carry recall state.
 
     // Mixed local/network pagination uses the original timestamp as its boundary.
     if (hasHistoryBeforeTime && append === 'top') {
@@ -1856,9 +1859,40 @@ async function saveMsg(
     if (hasHistoryBeforeTime) uiStore.historyBeforeTime = undefined
 }
 
-async function normalizeMessagesFromPayload(payload: any): Promise<any[] | undefined> {
+async function normalizeMessagesFromPayload(payload: any, expandEmpty = false, isRequestActive = () => true): Promise<any[] | undefined> {
     const rawList = getMsgData('message_list', payload, msgPath.message_list)
-    return getMessageList(rawList)
+    const authStore = useAuthStore()
+    const chatStore = useChatStore()
+    const chat = chatStore.chatInfo.show
+    const account = authStore.loginInfo.uin
+    const map = authStore.jsonMap
+    const isActive = () => isRequestActive() && chatStore.chatInfo.show === chat &&
+        authStore.loginInfo.uin === account && authStore.jsonMap === map
+    const list = await getMessageList(rawList)
+    if (!expandEmpty || map.message_list?.pagerType !== 'full' || !list || !isEmptyHistoryPage(list)) return list
+    if (!isActive()) return undefined
+    const info = getMsgData('message_info', list[0], msgPath.message_info)?.[0]
+    const id = info?.group_id ?? info?.private_id
+    if (id != null && String(id) !== String(chat.id)) return undefined
+    const action = chat.type === 'group' ? map.message_list.name : map.message_list.private_name
+    return expandEmptyHistoryPage(list, async count => {
+        try {
+            const response = await Connector.callRawApi(action ?? 'get_chat_history', {
+                group_id: chat.type === 'group' ? chat.id : undefined,
+                user_id: chat.type !== 'group' ? chat.id : undefined,
+                message_id: 0,
+                count,
+            }, 10000)
+            if (!isActive()) return undefined
+            if (response?.status !== 'ok' || Number(response.retcode ?? 0) !== 0 || response.data == null) {
+                throw new Error('Empty history expansion failed')
+            }
+            return getMessageList(getMsgData('message_list', response, msgPath.message_list))
+        } catch (error) {
+            if (isActive()) logger.error(error as Error, 'Loading past empty history failed')
+            return undefined
+        }
+    }, isActive)
 }
 
 export async function normalizeMessagesForPreview(payload: any): Promise<any[]> {
@@ -2005,6 +2039,8 @@ function hasResolvableImageSource(msg: any): boolean {
 }
 
 function shouldReplaceDuplicateMessage(existing: any, incoming: any): boolean {
+    if (Array.isArray(incoming?.message) && incoming.message.length === 0 &&
+        Array.isArray(existing?.message) && existing.message.length > 0) return true
     const settingsStore = useSettingsStore()
     if (!hasImageMessage(incoming)) return false
     if (existing?._from_local_db !== true) return false
