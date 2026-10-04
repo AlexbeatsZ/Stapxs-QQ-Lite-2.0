@@ -62,6 +62,7 @@ import {
     failUploadTask,
 } from '@renderer/components/FileManager.vue'
 import { getOneBotResponseError } from './utils/fileTransferUtil'
+import { expandEmptyHistoryPage, isEmptyHistoryPage } from './utils/emptyHistory'
 import { refreshFavicon } from './favicon'
 import { Img } from './model/img'
 import { ensurePinyinLoaded, getPinyin, isPinyinReady } from './utils/pinyin'
@@ -870,7 +871,7 @@ const msgFunctions = {
             return
         }
         // 无论是否有本地预填充，都以网络数据替换（保证最新消息不遗漏）
-        saveMsg(msg)
+        return saveMsg(msg, undefined, true)
     },
     getChatHistoryGapFill: (
         _: string,
@@ -1709,13 +1710,13 @@ function saveClassInfo(
     settingsStore.classes = list
 }
 
-async function saveMsg(msg: any, append = undefined as undefined | string) {
+async function saveMsg(msg: any, append = undefined as undefined | string, expandEmpty = false) {
     const uiStore = useUIStore()
     const authStore = useAuthStore()
     const chatStore = useChatStore()
     const contactStore = useContactStore()
     const settingsStore = useSettingsStore()
-    let list = await normalizeMessagesFromPayload(msg)
+    let list = await normalizeMessagesFromPayload(msg, expandEmpty)
     if (list != undefined) {
         const historyBeforeTime = Number(uiStore.historyBeforeTime)
         const hasHistoryBeforeTime = Number.isFinite(historyBeforeTime)
@@ -1734,10 +1735,8 @@ async function saveMsg(msg: any, append = undefined as undefined | string) {
                 return
             }
         }
-        // 将消息中 message 字段为空数组的消息过滤掉
-        list = list.filter((item: any) => {
-            return item.message.length > 0
-        })
+        // Recalled records occupy server pagination slots. Retain their IDs and
+        // timestamps so a full-page request can advance past them.
 
         // 上拉历史时按时间戳作为边界（兼容增量/全量两种分页模式）。
         if (hasHistoryBeforeTime && append === 'top') {
@@ -1819,9 +1818,40 @@ async function saveMsg(msg: any, append = undefined as undefined | string) {
     }
 }
 
-async function normalizeMessagesFromPayload(payload: any): Promise<any[] | undefined> {
+async function normalizeMessagesFromPayload(payload: any, expandEmpty = false): Promise<any[] | undefined> {
     const rawList = getMsgData('message_list', payload, msgPath.message_list)
-    return getMessageList(rawList)
+    const authStore = useAuthStore()
+    const chatStore = useChatStore()
+    const chat = chatStore.chatInfo.show
+    const account = authStore.loginInfo.uin
+    const map = authStore.jsonMap
+    const isActive = () => chatStore.chatInfo.show === chat &&
+        authStore.loginInfo.uin === account && authStore.jsonMap === map
+    const list = await getMessageList(rawList)
+    if (!expandEmpty || map.message_list?.pagerType !== 'full' || !list || !isEmptyHistoryPage(list)) return list
+    if (!isActive()) return undefined
+    const info = getMsgData('message_info', list[0], msgPath.message_info)?.[0]
+    const id = info?.group_id ?? info?.private_id
+    if (id != null && String(id) !== String(chat.id)) return undefined
+    const action = chat.type === 'group' ? map.message_list.name : map.message_list.private_name
+    return expandEmptyHistoryPage(list, async count => {
+        try {
+            const response = await Connector.callRawApi(action ?? 'get_chat_history', {
+                group_id: chat.type === 'group' ? chat.id : undefined,
+                user_id: chat.type !== 'group' ? chat.id : undefined,
+                message_id: 0,
+                count,
+            }, 10000)
+            if (!isActive()) return undefined
+            if (response?.status !== 'ok' || Number(response.retcode ?? 0) !== 0 || response.data == null) {
+                throw new Error('Empty history expansion failed')
+            }
+            return getMessageList(getMsgData('message_list', response, msgPath.message_list))
+        } catch (error) {
+            if (isActive()) logger.error(error as Error, 'Loading past empty history failed')
+            return undefined
+        }
+    }, isActive)
 }
 
 export async function normalizeMessagesForPreview(payload: any): Promise<any[]> {
@@ -1968,6 +1998,9 @@ function hasResolvableImageSource(msg: any): boolean {
 }
 
 function shouldReplaceDuplicateMessage(existing: any, incoming: any): boolean {
+    // A fresh empty record also removes stale content retained in local history.
+    if (Array.isArray(incoming?.message) && incoming.message.length === 0 &&
+        Array.isArray(existing?.message) && existing.message.length > 0) return true
     const settingsStore = useSettingsStore()
     if (!hasImageMessage(incoming)) return false
     if (existing?._from_local_db !== true) return false
