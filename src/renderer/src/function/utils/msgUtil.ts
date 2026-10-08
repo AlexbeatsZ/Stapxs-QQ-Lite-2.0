@@ -426,6 +426,7 @@ export function parseCQ(data: any) {
 * @param msg 消息体
 * @param preShow 是否消息预显
 * @param echo 回显的事件名
+* @param waitForResponse 是否等待 OneBot 回报，供逐条发送使用
 */
 export function sendMsgRaw(
     id: string,
@@ -433,6 +434,7 @@ export function sendMsgRaw(
     msg: string | any[] | undefined,
     preShow = false,
     echo = 'sendMsgBack',
+    waitForResponse = false,
 ) {
     const chatStore = useChatStore()
     const authStore = useAuthStore()
@@ -445,16 +447,16 @@ export function sendMsgRaw(
     // 预发送消息
     // 将消息构建为完整消息体先显示出去
     const msgUUID = uuid()
-    if (preShow) {
+    if (preShow && String(chatStore.chatInfo.show.id) === String(id) && chatStore.chatInfo.show.type === type) {
         const preShowMsg = JSON.parse(JSON.stringify(msg));
         preShowMsg.forEach((item: any) => {
             // 对 base64 图片做特殊处理
             if (item.type == 'image') {
-                if (item.file.startsWith('base64://')) {
+                if (typeof item.file === 'string' && item.file.startsWith('base64://')) {
                     const b64Str = (item.file as string).substring(9)
                     item.url = 'data:image/png;base64,' + b64Str
                 } else {
-                    item.url = item.file
+                    item.url = item.url || item.file
                 }
             }
         })
@@ -505,7 +507,7 @@ export function sendMsgRaw(
             msg.forEach((item) => {
                 const newResult = {} as { [key: string]: any }
                 newResult.type = item.type
-                newResult.data = item
+                newResult.data = JSON.parse(JSON.stringify(item))
                 delete newResult.data.type
                 // 特殊处理，如果 newResult.data 里有 _type 字段，给它改成 type
                 if (newResult.data._type != undefined) {
@@ -518,23 +520,31 @@ export function sendMsgRaw(
         }
     }
     if (msg !== undefined && msg.length > 0) {
+        const callback = echo + '_uuid_' + msgUUID + (waitForResponse ? '_wait' : '')
+        const onSendFailure = (error: unknown) => {
+            const pendingIndex = chatStore.messageList.findIndex(item => item.fake_message_id === msgUUID)
+            if (pendingIndex !== -1) chatStore.messageList.splice(pendingIndex, 1)
+            throw error
+        }
+        const send = (name: string, value: { [key: string]: any }) => {
+            if (waitForResponse) return Connector.sendAndWait(name, value, callback).catch(onSendFailure)
+            return Connector.send(name, value, callback)
+        }
+        sendStatEvent('send_msg', { type: type })
         if (authStore.jsonMap.name === 'Lagrange.OneBot') {
-            lgrSendMsg(id, msg, type, echo + '_uuid_' + msgUUID)
-            sendStatEvent('send_msg', { type: type })
-            return
+            const response = lgrSendMsg(id, msg, type, callback, waitForResponse)
+            return waitForResponse ? response?.catch(onSendFailure) : response
         }
         switch (type) {
             case 'group':
-                Connector.send(
+                return send(
                     authStore.jsonMap.message_list.name_group_send ??
                     'send_msg',
                     { group_id: id, message: msg },
-                    echo + '_uuid_' + msgUUID,
                 )
-                break
             case 'user': {
                 if (String(id).indexOf('/') > 1) {
-                    Connector.send(
+                    return send(
                         authStore.jsonMap.message_list.name_temp_send ??
                         'send_temp_msg',
                         {
@@ -542,20 +552,16 @@ export function sendMsgRaw(
                             group_id: id.split('/')[1],
                             message: msg,
                         },
-                        echo + '_uuid_' + msgUUID,
                     )
                 } else {
-                    Connector.send(
+                    return send(
                         authStore.jsonMap.message_list.name_user_send ??
                         'send_msg',
                         { user_id: id, message: msg },
-                        echo + '_uuid_' + msgUUID,
                     )
                 }
-                break
             }
         }
-        sendStatEvent('send_msg', { type: type })
     }
 }
 
@@ -942,7 +948,8 @@ export function getDifferencesWithRanges(a: string, b: string) {
  * lgr专用发送消息，懒得写了，不做通用适配，胡乱应付下吧
  * @param msg 消息内容
  */
-function lgrSendMsg(id: string, msg: any, type: string, cb: string) {
+function lgrSendMsg(id: string, msg: any, type: string, cb: string, waitForResponse = false) {
+    const send = (name: string, value: { [key: string]: any }) => waitForResponse ?Connector.sendAndWait(name, value, cb) : Connector.send(name, value, cb)
     if (msg[0].type === 'node') {
         const sendMsgs = [] as any[]
         msg.forEach((item) => {
@@ -964,32 +971,28 @@ function lgrSendMsg(id: string, msg: any, type: string, cb: string) {
             sendMsgs.push(msg)
         })
         if (type === 'group') {
-            Connector.send(
+            return send(
                 'send_group_forward_msg',
                 { group_id: id, messages: sendMsgs },
-                cb,
             )
         } else if (type === 'user') {
-            Connector.send(
+            return send(
                 'send_private_forward_msg',
                 { user_id: id, messages: sendMsgs },
-                cb,
             )
         } else {
             new PopInfo().add(PopType.ERR, 'lgr不支持匿名聊天')
         }
     } else {
         if (type === 'group') {
-            Connector.send(
+            return send(
                 'send_group_msg',
                 { group_id: id, message: msg },
-                cb,
             )
         } else if (type === 'user') {
-            Connector.send(
+            return send(
                 'send_private_msg',
                 { user_id: id, message: msg },
-                cb,
             )
         } else {
             new PopInfo().add(PopType.ERR, 'lgr不支持匿名聊天')

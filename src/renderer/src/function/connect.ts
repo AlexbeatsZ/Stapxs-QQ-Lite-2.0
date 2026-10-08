@@ -293,6 +293,7 @@ export class Connector {
             delete data.echo
             // 旧回调系统处理
             if (echo.startsWith('send_')) {
+                if (this.pendingSendEchoes.has(echo)) this.ReMap.set(echo, { ...data })
                 echo = echo.slice(5)
                 dispatch(data, echo)
                 return
@@ -305,6 +306,7 @@ export class Connector {
      * 返回值Map
      */
     private static ReMap: Map<string, any> = new Map()
+    private static pendingSendEchoes = new Set<string>()
 
     private static waitReturn(echo: string, timeout: number=50000): Promise<any> {
         return new Promise((resolve, reject) => {
@@ -511,6 +513,24 @@ export class Connector {
             this.sendSeeMod(name,value,echo)
         } else {
             this.sendRaw(name, value, echo)
+        }
+    }
+
+    /** Wait for a legacy send's echo while retaining its UI callback. */
+    static async sendAndWait(
+        name: string,
+        value: { [key: string]: any },
+        echo: string,
+        timeout = 50000,
+    ): Promise<any> {
+        const responseEcho = 'send_' + echo
+        this.pendingSendEchoes.add(responseEcho)
+        try {
+            this.send(name, value, echo)
+            return await this.waitReturn(responseEcho, timeout)
+        } finally {
+            this.pendingSendEchoes.delete(responseEcho)
+            this.ReMap.delete(responseEcho)
         }
     }
     /**

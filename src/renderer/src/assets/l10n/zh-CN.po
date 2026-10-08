@@ -1913,6 +1913,9 @@ msgstr ""
 msgid "逐条转发"
 msgstr ""
 
+msgid "逐条转发失败，已发送 {sent}/{count} 条：{error}"
+msgstr ""
+
 msgid "将按顺序逐条转发 {count} 条消息，是否继续？"
 msgstr ""
 

@@ -652,6 +652,7 @@ import {
     getOneBotResponseError,
     uploadFileStream,
 } from '@renderer/function/utils/fileTransferUtil'
+import { prepareForwardMessage, snapshotForwardMessages } from '@renderer/function/utils/forwardMessage'
 
 defineOptions({ name: 'ViewChat' })
 
@@ -1829,9 +1830,10 @@ function forwardMsg(data: UserFriendElem & UserGroupElem) {
     const id = data.group_id ? data.group_id : data.user_id
     const targetId = String(id)
     const targetType = data.group_id ? 'group' : 'user'
-    const msgList = chatStore.messageList.filter((item) => {
-        return multipleSelectList.value.includes(item.message_id)
-    })
+    const msgList = snapshotForwardMessages(
+        details.value[3].open ? tags.value.search.list : list,
+        multipleSelectList.value,
+    )
     const shouldPreShow = () =>
         String(chat.show.id) === targetId && chat.show.type === targetType
 
@@ -1841,6 +1843,7 @@ function forwardMsg(data: UserFriendElem & UserGroupElem) {
     }
 
     if (forwardAction === 'individual-messages') {
+        let started = false
         const popInfo = {
             title: $t('逐条转发'),
             html: $t('将按顺序逐条转发 {count} 条消息，是否继续？', {
@@ -1856,17 +1859,31 @@ function forwardMsg(data: UserFriendElem & UserGroupElem) {
                 {
                     text: $t('确定'),
                     master: true,
-                    fun: () => {
-                        msgList.forEach((item) => {
-                            sendMsgRaw(
-                                targetId,
-                                targetType,
-                                cloneMessagePayload(item.message),
-                                shouldPreShow(),
-                            )
-                        })
+                    fun: async () => {
+                        if (started) return
+                        started = true
                         multipleSelectList.value = []
                         uiStore.popBoxList.shift()
+                        let sent = 0
+                        try {
+                            const payloads = msgList.map(item => prepareForwardMessage(item.message))
+                            for (const payload of payloads) {
+                                const response = await sendMsgRaw(
+                                    targetId, targetType, payload, shouldPreShow(), 'sendMsgBack', true,
+                                )
+                                const error = getOneBotResponseError(response)
+                                if (error) throw new Error(error)
+                                if (response?.data?.message_id == null && response?.message_id == null) {
+                                    throw new Error('OneBot response has no message ID')
+                                }
+                                sent++
+                            }
+                        } catch (error) {
+                            new PopInfo().add(PopType.ERR, $t('逐条转发失败，已发送 {sent}/{count} 条：{error}', {
+                                sent, count: msgList.length,
+                                error: error instanceof Error ? error.message : String(error),
+                            }))
+                        }
                     },
                 },
             ],
@@ -1926,7 +1943,7 @@ function forwardMsg(data: UserFriendElem & UserGroupElem) {
                                 id: item.message_id,
                                 user_id: item.sender.user_id,
                                 nickname: item.sender.nickname,
-                                content: cloneMessagePayload(item.message),
+                                content: prepareForwardMessage(item.message),
                             }
                         })
                         sendMsgRaw(
@@ -1961,7 +1978,7 @@ function forwardMsg(data: UserFriendElem & UserGroupElem) {
                         sendMsgRaw(
                             targetId,
                             targetType,
-                            cloneMessagePayload(msgData.message),
+                            prepareForwardMessage(msgData.message),
                             shouldPreShow(),
                         )
                         uiStore.popBoxList.shift()

@@ -63,6 +63,7 @@ import {
     failUploadTask,
 } from '@renderer/components/FileManager.vue'
 import { getOneBotResponseError } from './utils/fileTransferUtil'
+import { reconcileSentMessage } from './utils/sentMessage'
 import { refreshFavicon } from './favicon'
 import { Img } from './model/img'
 import { ensurePinyinLoaded, getPinyin, isPinyinReady } from './utils/pinyin'
@@ -1011,32 +1012,36 @@ const msgFunctions = {
     ) => {
         const authStore = useAuthStore()
         const chatStore = useChatStore()
-        if (msg.message_id == undefined) {
-            msg.message_id = msg.data.message_id
+        const error = getOneBotResponseError(msg)
+        if (error) {
+            const pendingIndex = chatStore.messageList.findIndex(item => item.fake_message_id === echoList[2])
+            if (pendingIndex !== -1) chatStore.messageList.splice(pendingIndex, 1)
+            if (echoList[3] !== 'wait') popInfo.add(PopType.ERR, error)
+            return
         }
+        msg.message_id ??= msg.data?.message_id
+        if (msg.message_id == null) return
         if (echoList[1] == 'forward') {
-            // PS：这儿写是写了转发成功，事实上不确定消息有没有真的发送出去（x
             popInfo.add(
                 PopType.INFO,
                 app.config.globalProperties.$t('消息已转发'),
             )
         } else if (echoList[1] == 'uuid') {
             const messageId = echoList[2]
-            // 去 messagelist 里找到这条消息
-            chatStore.messageList.forEach((item) => {
-                if (item.message_id == messageId) {
-                    item.message_id = msg.message_id
-                    item.fake_msg = false
-                    return
-                }
-            })
+            const pending = chatStore.messageList.find(item => item.fake_message_id === messageId)
+            if (!pending) return
+            const delivered = chatStore.messageList.find(item => item !== pending &&
+                String(item.message_id) === String(msg.message_id))
+            pending.message_id = msg.message_id
+            pending.fake_msg = false
+            if (delivered) reconcileSentMessage(chatStore.messageList, delivered)
             // 请求消息内容
             // PS：其实有消息通知的情况下不需要再去主动获取了
             // 但是为了兼容没有开启自身消息通知的情况，还是保留了这个功能
             Connector.send(
                 authStore.jsonMap.get_message.name ?? 'get_msg',
                 { message_id: msg.message_id },
-                'getSendMsg_' + msg.message_id,
+                'getSendMsg_' + msg.message_id + '_' + messageId,
             )
         }
     },
@@ -1270,7 +1275,6 @@ const msgFunctions = {
 
     /**
      * 获取发送的消息（消息发送后处理）
-     * @deprecated 功能已被遗弃，暂时保留方法
      */
     getSendMsg: (
         _: string,
@@ -1279,28 +1283,25 @@ const msgFunctions = {
     ) => {
         const authStore = useAuthStore()
         const chatStore = useChatStore()
+        if (getOneBotResponseError(msg) || !msg.data) return
+        const fakeMsg = chatStore.messageList.find(item =>
+            String(item.message_id) === echoList[1] &&
+            item.fake_message_id === echoList[2])
+        if (!fakeMsg) return
         const msgInfo = getMsgData('message_info', msg.data, msgPath.message_info)
         if (msgInfo) {
             const info = msgInfo[0]
             if (echoList[1] !== info.message_id.toString()) {
                 // 返回的不是这条消息，重新请求
                 setTimeout(() => {
+                    if (!chatStore.messageList.includes(fakeMsg)) return
                     Connector.send(
                         authStore.jsonMap.get_message.name ?? 'get_msg',
                         { message_id: echoList[1] },
-                        'getSendMsg_' + echoList[1]
+                        'getSendMsg_' + echoList[1] + '_' + echoList[2]
                     )
                 }, 5000)
             } else {
-                // 列表内最近的一条 fake_msg（倒序查找）
-                let fakeMsg = null as any
-                for (let i = chatStore.messageList.length - 1; i > 0; i--) {
-                    const msg = chatStore.messageList[i]
-                    if (msg.fake_msg != undefined && info.sender == authStore.loginInfo.uin) {
-                        fakeMsg = msg
-                        break
-                    }
-                }
                 // 预发送消息刷新
                 if (fakeMsg != null) {
                     // 将这条消息直接替换掉
@@ -1310,15 +1311,10 @@ const msgFunctions = {
                         msgPath.message_list,
                     )
                     getMessageList(trueMsg).then((trueMsg) => {
-                        if (trueMsg?.length == 1) {
-                            // 使用消息对象引用直接更新，避免索引问题
-                            fakeMsg.message = trueMsg[0].message
-                            fakeMsg.raw_message = trueMsg[0].raw_message
-                            fakeMsg.time = trueMsg[0].time
-                            fakeMsg.fake_msg = undefined
-                            fakeMsg.revoke = false
+                        if (trueMsg?.length == 1 && chatStore.messageList.includes(fakeMsg)) {
+                            reconcileSentMessage(chatStore.messageList, trueMsg[0])
                         }
-                    })
+                    }).catch(error => logger.error(error, '刷新已发送消息失败'))
                 }
             }
         }
@@ -2011,10 +2007,9 @@ function compareMessageOrder(a: any, b: any): number {
         return sa - sb
     }
 
-    const ia = normalizeMessageId(a?.message_id)
-    const ib = normalizeMessageId(b?.message_id)
-    if (ia === ib) return 0
-    return ia.localeCompare(ib)
+    // Message IDs are opaque (and can be negative); they do not encode order.
+    // Stable sort retains the backend/insertion order when no sequence exists.
+    return 0
 }
 
 function getImageSegments(msg: any): any[] {
@@ -2254,39 +2249,6 @@ function newMsg(_: string, data: any) {
         })
         const isImportant = senderInfo?.class_id == 9999
 
-        // 预发送消息填充 ============================================
-        // 列表内最近的一条 fake_msg（倒序查找）
-        let fakeMsg = null as any
-        for (let i = chatStore.messageList.length - 1; i > 0; i--) {
-            const msg = chatStore.messageList[i]
-            if (msg.fake_msg != undefined && sender == loginId) {
-                fakeMsg = msg
-                break
-            }
-        }
-        // 预发送消息刷新
-        if (fakeMsg != null) {
-            // 将这条消息直接替换掉
-            const trueMsg = getMsgData(
-                'message_list',
-                buildMsgList([data]),
-                msgPath.message_list,
-            )
-            getMessageList(trueMsg).then((trueMsg) => {
-                if (trueMsg?.length == 1) {
-                    // 使用消息对象引用直接更新，避免索引问题
-                    fakeMsg.message = trueMsg[0].message
-                    fakeMsg.raw_message = trueMsg[0].raw_message
-                    fakeMsg.time = trueMsg[0].time
-                    fakeMsg.fake_msg = undefined
-                    fakeMsg.revoke = false
-                }
-            })
-            // 移除最顶端的一条消息以被动刷新整个列表
-            chatStore.messageList.shift()
-            return
-        }
-
         // 刷新 favicon
         refreshFavicon()
 
@@ -2296,6 +2258,7 @@ function newMsg(_: string, data: any) {
         const list = normalizeNewIncomingMessage(data)
 
         if (list.length > 0) {
+            if (sender == loginId) reconcileSentMessage(chatStore.messageList, list[0])
             // 保存到本地历史
             saveMessagesWithSideEffects(authStore.loginInfo.uin, list)
             data = list[0]
