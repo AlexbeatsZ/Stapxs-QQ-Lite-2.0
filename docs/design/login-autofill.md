@@ -33,7 +33,7 @@ only changes the application's inputs immediately before their normal removal.
   cleared one/two-field forms on tab navigation and app unmount; returning to the
   form created visible inputs. This models the stopped visibility observer and
   does not establish acceptance in the user's actual Chrome session.
-- Real acceptance: refresh the deployed client, use KeePassXC normally, connect,
+- Real acceptance procedure: refresh the deployed client, use KeePassXC normally, connect,
   and verify that the icon disappears in Messages and over the update dialog.
   Leaving Home for Settings and reconnecting should also work.
 - ROG's `stapxs-qq` service uses port `8081:8080` and an existing relay image.
@@ -44,8 +44,10 @@ only changes the application's inputs immediately before their normal removal.
 - Deployed on 2026-10-15: `stapxs-qq-lite:keepass-login-20261015-970017b`,
   based on `stapxs-qq-lite:recalled-history-20261005-cd3b67c`. Candidate and
   production `/_stapxs/health` both reported `relayEnabled: true`. Project lint,
-  typecheck, 102 existing tests and the production build passed. User Chrome
-  acceptance remains open.
+  typecheck, 102 existing tests and the production build passed. On 2026-10-15,
+  the user confirmed real-browser acceptance of the reported login/icon
+  disappearance issue. The separate Settings/reconnect scenarios were covered
+  by the fixture and were not individually reported as real-browser tests.
 - Upstream submission: [PR #412](https://github.com/Stapxs/Stapxs-QQ-Lite-2.0/pull/412),
   targeting `dev` at base `ee8b0c6`; only `App.vue` is included in commit
   `3a96f5f`. Upstream lint/typecheck and `build --target esnext` passed. Default
