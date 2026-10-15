@@ -17,6 +17,11 @@ from remaining after the OneBot login form is removed.
 
 # Active Work
 
+- Upstream PR [#412](https://github.com/Stapxs/Stapxs-QQ-Lite-2.0/pull/412)
+  is open against `dev`: `3a96f5f` on `codex/fix-keepass-login-icons`, containing
+  only the App.vue compatibility hook. Upstream check and `build --target esnext`
+  passed; default build also fails on the unmodified upstream base because of
+  its existing top-level-await/build-target mismatch.
 - 2026-10-15: KeePassXC 1.10.4.1 DOM reproduction confirmed two orphaned icons
   with the original teardown. The input-style hook cleared one/two-field forms
   on navigation and app unmount, including returning to the login form.

@@ -46,3 +46,8 @@ only changes the application's inputs immediately before their normal removal.
   production `/_stapxs/health` both reported `relayEnabled: true`. Project lint,
   typecheck, 102 existing tests and the production build passed. User Chrome
   acceptance remains open.
+- Upstream submission: [PR #412](https://github.com/Stapxs/Stapxs-QQ-Lite-2.0/pull/412),
+  targeting `dev` at base `ee8b0c6`; only `App.vue` is included in commit
+  `3a96f5f`. Upstream lint/typecheck and `build --target esnext` passed. Default
+  `build` failed both before and after the patch because upstream uses top-level
+  await with an older default build target; the PR documents this limitation.
