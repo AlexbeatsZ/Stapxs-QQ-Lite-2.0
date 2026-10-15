@@ -22,6 +22,10 @@ from remaining after the OneBot login form is removed.
   only the App.vue compatibility hook. Upstream check and `build --target esnext`
   passed; default build also fails on the unmodified upstream base because of
   its existing top-level-await/build-target mismatch.
+- PR #412 AI review checked on 2026-10-15: Sourcery completed with no change
+  suggestions or inline comments; SonarCloud quality gate passed with zero new
+  issues/security hotspots. Copilot did not review because the requesting
+  account had reached its quota. PR remains open for maintainer review.
 - 2026-10-15: KeePassXC 1.10.4.1 DOM reproduction confirmed two orphaned icons
   with the original teardown. The input-style hook cleared one/two-field forms
   on navigation and app unmount, including returning to the login form.
