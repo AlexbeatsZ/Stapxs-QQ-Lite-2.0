@@ -41,3 +41,8 @@ only changes the application's inputs immediately before their normal removal.
   `modules/` directory and relay-enabled index metadata, and preserve its runtime
   environment/port/restart configuration. Do not rebuild from the stale ROG
   `pre-release` checkout, which also has unrelated uncommitted changes.
+- Deployed on 2026-10-15: `stapxs-qq-lite:keepass-login-20261015-970017b`,
+  based on `stapxs-qq-lite:recalled-history-20261005-cd3b67c`. Candidate and
+  production `/_stapxs/health` both reported `relayEnabled: true`. Project lint,
+  typecheck, 102 existing tests and the production build passed. User Chrome
+  acceptance remains open.

@@ -20,8 +20,11 @@ from remaining after the OneBot login form is removed.
 - 2026-10-15: KeePassXC 1.10.4.1 DOM reproduction confirmed two orphaned icons
   with the original teardown. The input-style hook cleared one/two-field forms
   on navigation and app unmount, including returning to the login form.
-- ROG deployment is being updated from its current relay image. Actual Chrome
-  login/icon disappearance still needs the user's real browser acceptance.
+- ROG `stapxs-qq` now runs `stapxs-qq-lite:keepass-login-20261015-970017b`
+  at `8081:8080`, retaining the relay, runtime environment and deployed modules.
+  Candidate and production relay health checks passed. The project check
+  (lint/typecheck and 102 existing tests) and production build passed. Actual
+  Chrome login/icon disappearance still needs the user's real browser acceptance.
 - Completed: forwarding/delivery fixes, 18 forwarding runtime regressions,
   lint/typecheck, session/quote/recalled-history checks, 7 file-transfer regressions
   and production build (2026-10-08).
