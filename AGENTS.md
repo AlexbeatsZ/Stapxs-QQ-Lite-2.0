@@ -1,20 +1,27 @@
 # Goal
 
-Maintain this OneBot QQ client. Current work fixes individual forwarding order,
-image payloads and sent-message reconciliation without changing destination chats.
+Maintain this OneBot QQ client. Current work prevents password-manager icons
+from remaining after the OneBot login form is removed.
 
 # Current State
 
-- Baseline: `cd3b67c` on `main`; GitHub remote is the user's
+- Baseline: `99be7d8` on `main`; GitHub remote is the user's
   `AlexbeatsZ/Stapxs-QQ-Lite-2.0` fork.
 - Vue/TypeScript frontend; Yarn 4.12.0 is bundled in `.yarn/releases`.
 - Individual forwarding now captures source bodies, normalizes images and waits
   for checked responses in chronological order. Sent callbacks match IDs/UUIDs;
   live self events preserve unrelated history.
 - Same-second messages without a sequence retain insertion/backend order.
+- Login form teardown hides individual inputs before removing the subtree, so
+  KeePassXC-Browser can clean up its external icons while keeping autofill enabled.
 
 # Active Work
 
+- 2026-10-15: KeePassXC 1.10.4.1 DOM reproduction confirmed two orphaned icons
+  with the original teardown. The input-style hook cleared one/two-field forms
+  on navigation and app unmount, including returning to the login form.
+- ROG deployment is being updated from its current relay image. Actual Chrome
+  login/icon disappearance still needs the user's real browser acceptance.
 - Completed: forwarding/delivery fixes, 18 forwarding runtime regressions,
   lint/typecheck, session/quote/recalled-history checks, 7 file-transfer regressions
   and production build (2026-10-08).
@@ -37,7 +44,8 @@ image payloads and sent-message reconciliation without changing destination chat
   [quoted messages](docs/design/quoted-messages.md),
   [recalled history](docs/design/recalled-history.md),
   [file transfer](docs/design/file-transfer.md),
-  [forwarding and delivery](docs/design/message-forwarding.md).
+  [forwarding and delivery](docs/design/message-forwarding.md),
+  [login autofill](docs/design/login-autofill.md).
 
 # Durable Lessons
 
