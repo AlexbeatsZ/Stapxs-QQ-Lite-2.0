@@ -17,6 +17,17 @@ from remaining after the OneBot login form is removed.
 
 # Active Work
 
+- 2026-10-17: Web/Docker delegated (cross-origin) downloads lost file names:
+  browsers ignore `download` on cross-origin links and NapCat returns QQ
+  `ftn_handler` URLs with an empty `fname=`. `c24948b` on
+  `fix/web-download-filename` fills `fname`; the QQ server then sends a named
+  `Content-Disposition` (verified with curl). Same bug exists in upstream
+  `dev`/`next` (v3.5.2); upstream PR not opened yet. ROG `stapxs-qq` now runs
+  `stapxs-qq-lite:download-filename-20261017-c24948b` (overlay of
+  `keepass-login-20261015-970017b`, modules and relay meta retained, health
+  `relayEnabled: true`). Previous container kept stopped as `stapxs-qq-prev`
+  for rollback. Real-browser acceptance by the user is still open.
+
 - Upstream PR [#412](https://github.com/Stapxs/Stapxs-QQ-Lite-2.0/pull/412)
   is open against `dev`: `3a96f5f` on `codex/fix-keepass-login-icons`, containing
   only the App.vue compatibility hook. Upstream check and `build --target esnext`
