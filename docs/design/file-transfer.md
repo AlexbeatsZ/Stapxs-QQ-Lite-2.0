@@ -26,6 +26,29 @@ OneBot-specific upload extensions.
   mapped OneBot send action. Once that action starts, the protocol cannot
   reliably retract the file, so the UI must not report a late cancellation.
 
+## Drag-and-drop upload
+
+- While the chat panel is visible, files dragged from outside the page onto any
+  part of the window go to the open chat. Window-level capture listeners live
+  in `Chat.vue`; pure helpers and tests are in `fileDropUtil.ts` and
+  `tests/file-drop.test.mjs`.
+- QQ-displayable images (JPEG, PNG, GIF, WebP, BMP) follow the paste path
+  (`setImg`): they join the draft and are sent with the next message. Other
+  files, including SVG and HEIC, follow the file button path
+  (`confirmSendFile`), with the same 1 GB confirmation. Folders are skipped
+  with a notice; detect them with `webkitGetAsEntry()` during the `drop` event.
+- `ignore` (not external files, or the panel is hidden by `v-show`) leaves the
+  browser default alone. `block` (sidebar open, pop box shown, message search,
+  muted) still calls `preventDefault` so the browser does not open the file and
+  leave the app, but sends nothing and shows no overlay.
+- Drags that start inside the page (message images) are not uploads: a
+  `dragstart` flag excludes them and is reset on `dragend` and on `drop`.
+- The overlay is hidden when the tracked `dragenter` targets are all left
+  (detached targets are pruned) and, as a fallback, when no `dragover` arrives
+  for one second.
+- Tauri intercepts native file drops unless `dragDropEnabled` is turned off,
+  so the HTML5 drop events may not reach the page there.
+
 ## Download invariants
 
 - Electron and Tauri events carry a transfer task ID. Progress, completion,

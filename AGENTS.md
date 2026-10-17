@@ -17,6 +17,15 @@ from remaining after the OneBot login form is removed.
 
 # Active Work
 
+- 2026-10-18: Web drag-and-drop upload on `feat/web-file-drop` (from
+  `fix/web-download-filename`). Dropping files anywhere on the page while a
+  chat is visible sends them to that chat; rules are in
+  [file transfer](docs/design/file-transfer.md#drag-and-drop-upload). Verified
+  in the dev build against a synthetic local OneBot stub with constructed
+  `DragEvent`s: overlay text, PDF/SVG stream upload to the right friend, PNG
+  into the draft and sent as an image, search-mode block and hidden-panel
+  ignore. Not yet verified with a real OS drag or a real QQ backend; not
+  deployed to ROG.
 - 2026-10-17: Web/Docker delegated (cross-origin) downloads lost file names:
   browsers ignore `download` on cross-origin links and NapCat returns QQ
   `ftn_handler` URLs with an empty `fname=`. The client fills `fname` only on
@@ -90,6 +99,11 @@ from remaining after the OneBot login form is removed.
 
 - Controlled OneBot runtime regressions do not establish delivery through a
   logged-in QQ backend. Report that acceptance separately.
+- A `$t` key with `{param}` must be listed in `l10n/zh-CN.po`; a missing key is
+  returned verbatim without interpolation.
+- The default `msg_type` (2) is resolved only when history messages arrive.
+  A synthetic OneBot fixture with empty history makes every send a silent
+  no-op, so return at least one history message.
 - Own-message events may precede acknowledgements, and body-fetch callbacks can
   arrive out of order. Bind UUID to real ID and deduplicate that record rather
   than guessing by the latest placeholder. OneBot message IDs are opaque.
