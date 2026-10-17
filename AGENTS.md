@@ -24,16 +24,19 @@ from remaining after the OneBot login form is removed.
   in the dev build against a synthetic local OneBot stub with constructed
   `DragEvent`s: overlay text, PDF/SVG stream upload to the right friend, PNG
   into the draft and sent as an image, search-mode block and hidden-panel
-  ignore. Not yet verified with a real OS drag or a real QQ backend; not
-  deployed to ROG.
+  ignore. ROG `stapxs-qq` now runs
+  `stapxs-qq-lite:web-file-drop-20261018-1af515d` (overlay of
+  `download-filename-20261017-b6a0634`, modules identical, relay meta kept,
+  health `relayEnabled: true`). Rollback: stopped `stapxs-qq-prev`
+  (download-filename) and `stapxs-qq-prev-20261015` (keepass-login). Awaiting
+  the user's real OS drag acceptance; real QQ delivery not yet confirmed.
 - 2026-10-17: Web/Docker delegated (cross-origin) downloads lost file names:
   browsers ignore `download` on cross-origin links and NapCat returns QQ
   `ftn_handler` URLs with an empty `fname=`. The client fills `fname` only on
   `*.ftn.qq.com/ftn_handler/` URLs, percent-encoded with `encodeURIComponent`
-  (`URLSearchParams` turned spaces into `+`). ROG `stapxs-qq` runs
-  `stapxs-qq-lite:download-filename-20261017-b6a0634` (overlay of
-  `keepass-login-20261015-970017b`, modules and relay meta retained, health
-  `relayEnabled: true`); stopped `stapxs-qq-prev` kept for rollback.
+  (`URLSearchParams` turned spaces into `+`). Deployed to ROG as
+  `download-filename-20261017-b6a0634` (now superseded by the drag-and-drop
+  image above, which includes it).
   Verified in the user's Chrome with a real click: `被偷走的黎明_deepseek_1017 (1).html`
   saved with the exact name. Upstream PR
   [#414](https://github.com/Stapxs/Stapxs-QQ-Lite-2.0/pull/414) against `dev`
