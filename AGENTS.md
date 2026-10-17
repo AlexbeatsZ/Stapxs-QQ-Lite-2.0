@@ -28,8 +28,9 @@ from remaining after the OneBot login form is removed.
   `stapxs-qq-lite:web-file-drop-20261018-1af515d` (overlay of
   `download-filename-20261017-b6a0634`, modules identical, relay meta kept,
   health `relayEnabled: true`). Rollback: stopped `stapxs-qq-prev`
-  (download-filename) and `stapxs-qq-prev-20261015` (keepass-login). Awaiting
-  the user's real OS drag acceptance; real QQ delivery not yet confirmed.
+  (download-filename) and `stapxs-qq-prev-20261015` (keepass-login). On
+  2026-10-18 the user confirmed real OS drag-and-drop works in their browser;
+  an apparent failure before that was the stale PWA bundle (not refreshed).
 - 2026-10-17: Web/Docker delegated (cross-origin) downloads lost file names:
   browsers ignore `download` on cross-origin links and NapCat returns QQ
   `ftn_handler` URLs with an empty `fname=`. The client fills `fname` only on
