@@ -43,6 +43,11 @@ OneBot-specific upload extensions.
 - Cross-origin Web downloads are delegated to the browser download manager.
   This avoids XHR CORS failures, whole-file buffering, and application-level
   timeouts. Delegated tasks cannot provide reliable in-app progress.
+- Browsers ignore the `download` attribute on cross-origin links, so a
+  delegated download is named by the server. NapCat returns QQ `ftn_handler`
+  URLs with an empty `fname=`; the client fills it with the file name so the QQ
+  server sends `Content-Disposition` with that name. Without it the browser
+  names the file after the URL path and the extension is lost.
 - Same-origin Web downloads retain in-app progress, have no fixed timeout, and
   surface Promise rejection instead of leaving a task permanently active.
 

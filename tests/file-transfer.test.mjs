@@ -5,6 +5,7 @@ import {
     getOneBotResponseError,
     isActiveTransferStatus,
     uploadFileStream,
+    withDownloadFileName,
 } from '../src/renderer/src/function/utils/fileTransferUtil.ts'
 
 const options = {
@@ -24,6 +25,20 @@ test('keeps every in-progress transfer state visible', () => {
     for (const status of ['completed', 'delegated', 'failed', 'cancelled']) {
         assert.equal(isActiveTransferStatus(status), false)
     }
+})
+
+test('fills the empty QQ fname parameter for browser-managed downloads', () => {
+    const qq = new URL('https://njc-download.ftn.qq.com/ftn_handler/abc/?fname=')
+    assert.equal(
+        withDownloadFileName(qq, '回家 test.html').searchParams.get('fname'),
+        '回家 test.html',
+    )
+    assert.equal(qq.searchParams.get('fname'), '')
+
+    const named = new URL('https://njc-download.ftn.qq.com/ftn_handler/abc/?fname=a.txt')
+    assert.equal(withDownloadFileName(named, 'b.txt').href, named.href)
+    const plain = new URL('https://example.com/file?id=1')
+    assert.equal(withDownloadFileName(plain, 'b.txt').href, plain.href)
 })
 
 test('uploads a blob as ordered bounded chunks', async () => {
