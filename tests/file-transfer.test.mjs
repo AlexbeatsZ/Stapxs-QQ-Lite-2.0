@@ -29,14 +29,18 @@ test('keeps every in-progress transfer state visible', () => {
 
 test('fills the empty QQ fname parameter for browser-managed downloads', () => {
     const qq = new URL('https://njc-download.ftn.qq.com/ftn_handler/abc/?fname=')
+    const named = withDownloadFileName(qq, '回家 a+b (1)&x=%$&.html')
+    assert.equal(named.searchParams.get('fname'), '回家 a+b (1)&x=%$&.html')
+    // QQ 文件服务器不会把 + 还原为空格
+    assert.equal(named.search.includes('+'), false)
     assert.equal(
-        withDownloadFileName(qq, '回家 test.html').searchParams.get('fname'),
-        '回家 test.html',
+        withDownloadFileName(new URL('https://n.ftn.qq.com/ftn_handler/a/?x=1&fname=&y=2'), 'a b').search,
+        '?x=1&fname=a%20b&y=2',
     )
     assert.equal(qq.searchParams.get('fname'), '')
 
-    const named = new URL('https://njc-download.ftn.qq.com/ftn_handler/abc/?fname=a.txt')
-    assert.equal(withDownloadFileName(named, 'b.txt').href, named.href)
+    const preset = new URL('https://njc-download.ftn.qq.com/ftn_handler/abc/?fname=a.txt')
+    assert.equal(withDownloadFileName(preset, 'b.txt').href, preset.href)
     for (const href of [
         'https://example.com/file?id=1',
         'https://example.com/ftn_handler/x/?fname=',
