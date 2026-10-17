@@ -37,6 +37,12 @@ from remaining after the OneBot login form is removed.
   `build --target esnext` passed; the default build still fails on upstream
   for the existing top-level-await/target mismatch. Tauri (default
   `dragDropEnabled`) and Electron are untested and noted as limits in the PR.
+  Sourcery's 5 findings and SonarCloud's `readonly` issue were fixed in
+  `ca2e38e` (upstream) / `d7ea11e` (fork); rules are in the design doc.
+  Verified in the upstream dev build against the synthetic stub with
+  `FAIL_STREAM=1` (base64 fallback): draft kept, image read before staging,
+  multi-image order, internal-drag marker, expired/active mute, overlay hides
+  on panel hide. Not redeployed to ROG yet; no replies posted on the PR.
 - 2026-10-17: Web/Docker delegated (cross-origin) downloads lost file names:
   browsers ignore `download` on cross-origin links and NapCat returns QQ
   `ftn_handler` URLs with an empty `fname=`. The client fills `fname` only on
