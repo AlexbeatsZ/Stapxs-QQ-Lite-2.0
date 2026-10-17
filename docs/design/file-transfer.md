@@ -50,7 +50,10 @@ OneBot-specific upload extensions.
   `*.ftn.qq.com/ftn_handler/` URLs are rewritten: other endpoints may give
   `fname` its own meaning or sign it. Encode the name with `encodeURIComponent`:
   the QQ server keeps `+` literally, so `URLSearchParams` form encoding turns
-  spaces into `+` in the saved name. Without it the browser
+  spaces into `+` in the saved name. Replace only the `fname` segment: re-serializing the
+  whole query with `URLSearchParams` would also rewrite other parameters
+  (`%20` becomes `+`). A literal `+` in a name must be sent as `%2B`. The same
+  `+` ambiguity previously broke saved access tokens at login (PR #380). Without it the browser
   names the file after the URL path and the extension is lost.
 - Same-origin Web downloads retain in-app progress, have no fixed timeout, and
   surface Promise rejection instead of leaving a task permanently active.

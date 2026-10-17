@@ -79,6 +79,11 @@ from remaining after the OneBot login form is removed.
 - The web build is a PWA (`autoUpdate`, skipWaiting + clientsClaim). After a
   deploy, the first reload still runs the old precached bundle; close the tabs
   or unregister the Service Worker before judging a fix in the browser.
+- `+` in URLs has broken this app twice: saved access tokens at login
+  (`09099e6`, PR #380 in `connect.ts`) and QQ download names (2026-10-17).
+  Encode values with `encodeURIComponent`, never let `URLSearchParams`
+  form-encode or re-serialize a query a server decodes literally, and keep a
+  test with a literal `+` and a space for any new URL-building code.
 - For automated download acceptance, use a real pointer click. A script
   `.click()` has no user activation, so the `target=_blank` delegated link is
   silently popup-blocked and nothing downloads.

@@ -31,8 +31,20 @@ test('fills the empty QQ fname parameter for browser-managed downloads', () => {
     const qq = new URL('https://njc-download.ftn.qq.com/ftn_handler/abc/?fname=')
     const named = withDownloadFileName(qq, '回家 a+b (1)&x=%$&.html')
     assert.equal(named.searchParams.get('fname'), '回家 a+b (1)&x=%$&.html')
-    // QQ 文件服务器不会把 + 还原为空格
+    // QQ 文件服务器不会把 + 还原为空格；文件名里的 + 必须编码为 %2B
     assert.equal(named.search.includes('+'), false)
+    assert.equal(
+        withDownloadFileName(qq, 'c++ notes+1.txt').search,
+        '?fname=c%2B%2B%20notes%2B1.txt',
+    )
+    // 只替换 fname，其他参数不能被重新序列化（%20 不能变成 +）
+    assert.equal(
+        withDownloadFileName(
+            new URL('https://n.ftn.qq.com/ftn_handler/a/?k=a%20b%2Bc+d&fname='),
+            'x+y',
+        ).search,
+        '?k=a%20b%2Bc+d&fname=x%2By',
+    )
     assert.equal(
         withDownloadFileName(new URL('https://n.ftn.qq.com/ftn_handler/a/?x=1&fname=&y=2'), 'a b').search,
         '?x=1&fname=a%20b&y=2',
