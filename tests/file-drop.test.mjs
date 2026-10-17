@@ -6,6 +6,7 @@ import {
     getDroppedFiles,
     hasDraggedFiles,
     isInlineImageFile,
+    markInternalDrag,
 } from '../src/renderer/src/function/utils/fileDropUtil.ts'
 
 function fileItem(file, isDirectory = false) {
@@ -23,6 +24,20 @@ test('only reacts to drags that carry system files', () => {
     assert.equal(hasDraggedFiles({ types: [] }), false)
     assert.equal(hasDraggedFiles(null), false)
     assert.equal(hasDraggedFiles(undefined), false)
+})
+
+test('ignores drags that start inside the page without leaving state behind', () => {
+    // 浏览器拖动页面内的图片时同样带有 Files 类型
+    const internal = {
+        types: ['text/uri-list', 'Files'],
+        setData(format) { this.types.push(format) },
+    }
+    markInternalDrag(internal)
+    assert.equal(hasDraggedFiles(internal), false)
+    markInternalDrag(null)
+
+    // 拖动源被移除、没有 dragend 时，下一次外部拖入仍然有效
+    assert.equal(hasDraggedFiles({ types: ['Files'] }), true)
 })
 
 test('collects dropped files and skips folders and string items', () => {

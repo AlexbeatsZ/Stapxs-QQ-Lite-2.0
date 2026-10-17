@@ -37,12 +37,24 @@ OneBot-specific upload extensions.
   files, including SVG and HEIC, follow the file button path
   (`confirmSendFile`), with the same 1 GB confirmation. Folders are skipped
   with a notice; detect them with `webkitGetAsEntry()` during the `drop` event.
+- `setImg` reads the image before it adds the placeholder and the cached data
+  together. Staging the placeholder first let a draft sent during the read
+  carry it away, and the late read then slipped the image into a later
+  message. Dropped images are read one at a time to keep their order.
+- The base64 compatibility upload (no stream mapping, or a stream failure for
+  files of at most 8 MB) sends the file as its own message with
+  `sendParsedMsg`. It must not clear `msg`, `sendCache` or `imgCache`: that
+  discarded draft text, a pending reply and images dropped with the file.
 - `ignore` (not external files, or the panel is hidden by `v-show`) leaves the
-  browser default alone. `block` (sidebar open, pop box shown, message search,
-  muted) still calls `preventDefault` so the browser does not open the file and
-  leave the app, but sends nothing and shows no overlay.
-- Drags that start inside the page (message images) are not uploads: a
-  `dragstart` flag excludes them and is reset on `dragend` and on `drop`.
+  browser default alone, and hides an overlay that is still shown. `block`
+  (sidebar open, pop box shown, message search, mute still active, compared
+  with `Date.now()`) still calls `preventDefault` so the browser does not open
+  the file and leave the app, but sends nothing and shows no overlay.
+- Drags that start inside the page (message images, which also carry `Files`)
+  are not uploads: `dragstart` adds the `application/x-ssqq-internal-drag` type
+  to their data. Do not use a flag reset on `dragend`: a source removed during
+  the drag gets no `dragend`, and the stuck flag made later external drops be
+  ignored, so the browser opened the file.
 - The overlay is hidden when the tracked `dragenter` targets are all left
   (detached targets are pruned) and, as a fallback, when no `dragover` arrives
   for one second.
