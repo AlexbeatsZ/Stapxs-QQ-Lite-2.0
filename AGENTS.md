@@ -19,16 +19,18 @@ from remaining after the OneBot login form is removed.
 
 - 2026-10-17: Web/Docker delegated (cross-origin) downloads lost file names:
   browsers ignore `download` on cross-origin links and NapCat returns QQ
-  `ftn_handler` URLs with an empty `fname=`. `c24948b` on
-  `fix/web-download-filename` fills `fname`; the QQ server (njc/tjc hosts)
-  then sends a named `Content-Disposition`. ROG `stapxs-qq` runs
-  `stapxs-qq-lite:download-filename-20261017-c24948b` (overlay of
+  `ftn_handler` URLs with an empty `fname=`. The client fills `fname` only on
+  `*.ftn.qq.com/ftn_handler/` URLs, percent-encoded with `encodeURIComponent`
+  (`URLSearchParams` turned spaces into `+`). ROG `stapxs-qq` runs
+  `stapxs-qq-lite:download-filename-20261017-b6a0634` (overlay of
   `keepass-login-20261015-970017b`, modules and relay meta retained, health
-  `relayEnabled: true`); stopped `stapxs-qq-prev` kept for rollback. The user
-  confirmed real-browser acceptance. Upstream PR
+  `relayEnabled: true`); stopped `stapxs-qq-prev` kept for rollback.
+  Verified in the user's Chrome with a real click: `被偷走的黎明_deepseek_1017 (1).html`
+  saved with the exact name. Upstream PR
   [#414](https://github.com/Stapxs/Stapxs-QQ-Lite-2.0/pull/414) against `dev`
-  (`62a5ee6` on `codex/fix-web-download-filename`, source files only; upstream
-  `dev` has no docs/tests directories for this module).
+  (`codex/fix-web-download-filename`, source files only; upstream `dev` has no
+  docs/tests for this module). Sourcery's QQ-only finding was addressed; the
+  re-review and SonarCloud passed.
 - Upstream PR [#412](https://github.com/Stapxs/Stapxs-QQ-Lite-2.0/pull/412)
   is open against `dev`: `3a96f5f` on `codex/fix-keepass-login-icons`, containing
   only the App.vue compatibility hook. Upstream check and `build --target esnext`
@@ -77,6 +79,9 @@ from remaining after the OneBot login form is removed.
 - The web build is a PWA (`autoUpdate`, skipWaiting + clientsClaim). After a
   deploy, the first reload still runs the old precached bundle; close the tabs
   or unregister the Service Worker before judging a fix in the browser.
+- For automated download acceptance, use a real pointer click. A script
+  `.click()` has no user activation, so the `target=_blank` delegated link is
+  silently popup-blocked and nothing downloads.
 
 - Controlled OneBot runtime regressions do not establish delivery through a
   logged-in QQ backend. Report that acceptance separately.
