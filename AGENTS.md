@@ -31,6 +31,12 @@ from remaining after the OneBot login form is removed.
   (download-filename) and `stapxs-qq-prev-20261015` (keepass-login). On
   2026-10-18 the user confirmed real OS drag-and-drop works in their browser;
   an apparent failure before that was the stale PWA bundle (not refreshed).
+  Upstream PR [#415](https://github.com/Stapxs/Stapxs-QQ-Lite-2.0/pull/415)
+  against `dev` (`codex/web-file-drop` = `a7ea7f4` on upstream `9e5dcf5`;
+  source files only, no tests/docs; Chinese description). Upstream `check` and
+  `build --target esnext` passed; the default build still fails on upstream
+  for the existing top-level-await/target mismatch. Tauri (default
+  `dragDropEnabled`) and Electron are untested and noted as limits in the PR.
 - 2026-10-17: Web/Docker delegated (cross-origin) downloads lost file names:
   browsers ignore `download` on cross-origin links and NapCat returns QQ
   `ftn_handler` URLs with an empty `fname=`. The client fills `fname` only on
@@ -43,16 +49,16 @@ from remaining after the OneBot login form is removed.
   [#414](https://github.com/Stapxs/Stapxs-QQ-Lite-2.0/pull/414) against `dev`
   (`codex/fix-web-download-filename`, source files only; upstream `dev` has no
   docs/tests for this module). Sourcery's QQ-only finding was addressed; the
-  re-review and SonarCloud passed.
+  re-review and SonarCloud passed. Merged into upstream `dev` (`9e5dcf5`).
 - Upstream PR [#412](https://github.com/Stapxs/Stapxs-QQ-Lite-2.0/pull/412)
-  is open against `dev`: `3a96f5f` on `codex/fix-keepass-login-icons`, containing
+  was merged into `dev` (`fe47ecb`): `3a96f5f` on `codex/fix-keepass-login-icons`, containing
   only the App.vue compatibility hook. Upstream check and `build --target esnext`
   passed; default build also fails on the unmodified upstream base because of
   its existing top-level-await/build-target mismatch.
 - PR #412 AI review checked on 2026-10-15: Sourcery completed with no change
   suggestions or inline comments; SonarCloud quality gate passed with zero new
   issues/security hotspots. Copilot did not review because the requesting
-  account had reached its quota. PR remains open for maintainer review.
+  account had reached its quota.
 - 2026-10-15: KeePassXC 1.10.4.1 DOM reproduction confirmed two orphaned icons
   with the original teardown. The input-style hook cleared one/two-field forms
   on navigation and app unmount, including returning to the login form.
