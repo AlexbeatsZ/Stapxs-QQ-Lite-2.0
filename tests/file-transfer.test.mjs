@@ -37,8 +37,15 @@ test('fills the empty QQ fname parameter for browser-managed downloads', () => {
 
     const named = new URL('https://njc-download.ftn.qq.com/ftn_handler/abc/?fname=a.txt')
     assert.equal(withDownloadFileName(named, 'b.txt').href, named.href)
-    const plain = new URL('https://example.com/file?id=1')
-    assert.equal(withDownloadFileName(plain, 'b.txt').href, plain.href)
+    for (const href of [
+        'https://example.com/file?id=1',
+        'https://example.com/ftn_handler/x/?fname=',
+        'https://evil.ftn.qq.com.example.com/ftn_handler/x/?fname=',
+        'https://njc-download.ftn.qq.com/other/?fname=',
+    ]) {
+        const other = new URL(href)
+        assert.equal(withDownloadFileName(other, 'b.txt').href, other.href)
+    }
 })
 
 test('uploads a blob as ordered bounded chunks', async () => {
