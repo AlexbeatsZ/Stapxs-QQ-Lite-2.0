@@ -34,7 +34,7 @@
     "build:ios": "vite build && capacitor sync ios && sh ./scripts/build-export-ipa.sh",
     "build:android": "vite build && capacitor sync android && capacitor build android",
     "preview": "vite preview",
-    "test:file-transfer": "node --experimental-strip-types --test tests/file-transfer.test.mjs"
+    "test:file-transfer": "node --experimental-strip-types --test tests/file-transfer.test.mjs tests/file-drop.test.mjs"
   },
   "workspaces": [
     "ssqq.capacitor-onebot-connector"
