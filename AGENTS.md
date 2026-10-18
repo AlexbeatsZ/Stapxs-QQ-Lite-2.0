@@ -25,6 +25,11 @@ from remaining after the OneBot login form is removed.
   Verified in the upstream dev web build against a synthetic NapCat stub
   (before: notice under B; after: at A's slot); `check` and
   `build --target esnext` passed. Not merged into the fork or deployed.
+  Sourcery's 2 findings (duplicate recall events dropped `originMsg`; the
+  event's own `message_seq` outranked copied `seq_id`) were fixed in `08e575d`
+  (keep an existing notice; clear event seq aliases first), re-verified with
+  the stub, answered in Chinese and added to the PR description. SonarCloud
+  passed; Copilot skipped (quota).
 - 2026-10-18: Issue #408 retest with the same stub (20 latest recalled empty
   records): upstream `dev` `9e5dcf5` still shows "暂无消息" with no paging
   (it filters empty records). The fork fix `f6c4096` (deployed on ROG) loaded
