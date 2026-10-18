@@ -42,7 +42,9 @@ from remaining after the OneBot login form is removed.
   Verified in the upstream dev build against the synthetic stub with
   `FAIL_STREAM=1` (base64 fallback): draft kept, image read before staging,
   multi-image order, internal-drag marker, expired/active mute, overlay hides
-  on panel hide. Not redeployed to ROG yet; no replies posted on the PR.
+  on panel hide. Not redeployed to ROG yet. 2026-10-18: replied to each
+  Sourcery thread in Chinese and added the review fixes to the PR
+  description (Sourcery's appended summary kept); awaiting maintainer review.
 - 2026-10-17: Web/Docker delegated (cross-origin) downloads lost file names:
   browsers ignore `download` on cross-origin links and NapCat returns QQ
   `ftn_handler` URLs with an empty `fname=`. The client fills `fname` only on
