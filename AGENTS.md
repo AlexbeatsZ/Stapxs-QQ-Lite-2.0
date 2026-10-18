@@ -42,6 +42,15 @@ from remaining after the OneBot login form is removed.
   retest, and one manual page-up showed all 25 readable + 20 placeholders.
   NapCat ignores `message_id` (only `message_seq`), so full-page paging asks
   for a larger latest window and replaces the list; a stub must ignore it too.
+  Sourcery's 3 findings: fixed 2 in `dadc049`. (a) The Tauri DB saves with
+  `INSERT OR IGNORE`, so empty records now call `dbRevokeMessage` after the
+  save. (b) The session preview skips empty records. The third, a private
+  `private_name` → `name` fallback, was declined: it matches
+  `loadHistoryMessage`, and `name` is the group action. SonarCloud then
+  failed on S9383 (unhandled `.then`), which `057b0e6` fixed with a `.catch`.
+  The re-review passed (gate OK, 0 issues; no new Sourcery comments). Replies
+  are in Chinese and the fixes are in the PR description. The DB revoke is
+  Tauri-only and was not exercised in the web stub. Awaiting maintainer review.
 - 2026-10-18: Web drag-and-drop upload on `feat/web-file-drop` (from
   `fix/web-download-filename`). Dropping files anywhere on the page while a
   chat is visible sends them to that chat; rules are in
