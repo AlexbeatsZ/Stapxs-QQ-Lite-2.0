@@ -33,8 +33,15 @@ from remaining after the OneBot login form is removed.
 - 2026-10-18: Issue #408 retest with the same stub (20 latest recalled empty
   records): upstream `dev` `9e5dcf5` still shows "暂无消息" with no paging
   (it filters empty records). The fork fix `f6c4096` (deployed on ROG) loaded
-  `count=40` and showed 20 readable + 20 placeholders. `f6c4096` was never
-  sent upstream.
+  `count=40` and showed 20 readable + 20 placeholders. Ported upstream as PR
+  [#417](https://github.com/Stapxs/Stapxs-QQ-Lite-2.0/pull/417) (closes #408;
+  `codex/fix-empty-history-pages` = `f51556c` on upstream `9e5dcf5`; source
+  only, Chinese description). Adapted to upstream's `filterSavedHistory` and
+  `historyRequestTracker`; expansion runs only for the first-page callback.
+  `check` and `build --target esnext` passed; stub before/after matched the
+  retest, and one manual page-up showed all 25 readable + 20 placeholders.
+  NapCat ignores `message_id` (only `message_seq`), so full-page paging asks
+  for a larger latest window and replaces the list; a stub must ignore it too.
 - 2026-10-18: Web drag-and-drop upload on `feat/web-file-drop` (from
   `fix/web-download-filename`). Dropping files anywhere on the page while a
   chat is visible sends them to that chat; rules are in
