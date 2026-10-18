@@ -17,6 +17,19 @@ from remaining after the OneBot login form is removed.
 
 # Active Work
 
+- 2026-10-18: Recall notices were placed after the next message
+  (`revokeMsg` removed A, then inserted at `msgIndex + 1`). Fix: replace in
+  place and inherit the original `time`/seq so time-sorted merges keep the
+  slot. Upstream PR [#416](https://github.com/Stapxs/Stapxs-QQ-Lite-2.0/pull/416)
+  (`codex/fix-recall-notice-position` = `5852c27` on upstream `9e5dcf5`).
+  Verified in the upstream dev web build against a synthetic NapCat stub
+  (before: notice under B; after: at A's slot); `check` and
+  `build --target esnext` passed. Not merged into the fork or deployed.
+- 2026-10-18: Issue #408 retest with the same stub (20 latest recalled empty
+  records): upstream `dev` `9e5dcf5` still shows "暂无消息" with no paging
+  (it filters empty records). The fork fix `f6c4096` (deployed on ROG) loaded
+  `count=40` and showed 20 readable + 20 placeholders. `f6c4096` was never
+  sent upstream.
 - 2026-10-18: Web drag-and-drop upload on `feat/web-file-drop` (from
   `fix/web-download-filename`). Dropping files anywhere on the page while a
   chat is visible sends them to that chat; rules are in
