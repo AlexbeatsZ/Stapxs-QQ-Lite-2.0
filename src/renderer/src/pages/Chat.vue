@@ -666,6 +666,7 @@ import {
     getOneBotResponseError,
     uploadFileStream,
 } from '@renderer/function/utils/fileTransferUtil'
+import { resolveForwardImages } from '@renderer/function/utils/forwardImage'
 import {
     FileDragTargets,
     getDroppedFiles,
@@ -1824,12 +1825,11 @@ function showForWard(action: ForwardAction = 'single-message') {
 function forwardSelf() {
     if (selectedMsg.value) {
         const msgData = JSON.parse(JSON.stringify(selectedMsg.value))
-        sendMsgRaw(
-            chat.show.id,
-            chat.show.type,
-            msgData.message,
-            true,
-        )
+        const targetId = chat.show.id
+        const targetType = chat.show.type
+        prepareForwardPayload(msgData.message)
+            .then(payload => sendMsgRaw(targetId, targetType, payload, true))
+            .catch(reportForwardError)
     }
     closeMsgMenu()
 }
@@ -1851,6 +1851,19 @@ function cloneMessagePayload<T>(payload: T): T {
         }
     }
     return JSON.parse(JSON.stringify(rawPayload))
+}
+
+function prepareForwardPayload<T>(payload: T): Promise<T> {
+    return resolveForwardImages(cloneMessagePayload(payload), async (file) => {
+        const response = await Connector.callRawApi('get_image', { file }, 15000)
+        return getOneBotResponseError(response) ? undefined : response?.data
+    })
+}
+
+function reportForwardError(error: unknown) {
+    new PopInfo().add(PopType.ERR, $t('转发失败：{error}', {
+        error: error instanceof Error ? error.message : String(error),
+    }))
 }
 
 function forwardMsg(data: UserFriendElem & UserGroupElem) {
@@ -1886,17 +1899,21 @@ function forwardMsg(data: UserFriendElem & UserGroupElem) {
                 {
                     text: $t('确定'),
                     master: true,
-                    fun: () => {
-                        msgList.forEach((item) => {
-                            sendMsgRaw(
-                                targetId,
-                                targetType,
-                                cloneMessagePayload(item.message),
-                                shouldPreShow(),
-                            )
-                        })
+                    fun: async () => {
                         multipleSelectList.value = []
                         uiStore.popBoxList.shift()
+                        try {
+                            // Resolve every picture first so a failure sends nothing out of order.
+                            const payloads = [] as any[]
+                            for (const item of msgList) {
+                                payloads.push(await prepareForwardPayload(item.message))
+                            }
+                            payloads.forEach((payload) => {
+                                sendMsgRaw(targetId, targetType, payload, shouldPreShow())
+                            })
+                        } catch (error) {
+                            reportForwardError(error)
+                        }
                     },
                 },
             ],
@@ -1949,24 +1966,29 @@ function forwardMsg(data: UserFriendElem & UserGroupElem) {
                 {
                     text: $t('确定'),
                     master: true,
-                    fun: () => {
-                        const msgBody = msgList.map((item) => {
-                            return {
-                                type: 'node',
-                                id: item.message_id,
-                                user_id: item.sender.user_id,
-                                nickname: item.sender.nickname,
-                                content: cloneMessagePayload(item.message),
-                            }
-                        })
-                        sendMsgRaw(
-                            targetId,
-                            targetType,
-                            msgBody,
-                            shouldPreShow(),
-                        )
+                    fun: async () => {
                         multipleSelectList.value = []
                         uiStore.popBoxList.shift()
+                        try {
+                            const msgBody = [] as any[]
+                            for (const item of msgList) {
+                                msgBody.push({
+                                    type: 'node',
+                                    id: item.message_id,
+                                    user_id: item.sender.user_id,
+                                    nickname: item.sender.nickname,
+                                    content: await prepareForwardPayload(item.message),
+                                })
+                            }
+                            sendMsgRaw(
+                                targetId,
+                                targetType,
+                                msgBody,
+                                shouldPreShow(),
+                            )
+                        } catch (error) {
+                            reportForwardError(error)
+                        }
                     },
                 },
             ],
@@ -1988,13 +2010,10 @@ function forwardMsg(data: UserFriendElem & UserGroupElem) {
                     text: $t('确定'),
                     master: true,
                     fun: () => {
-                        sendMsgRaw(
-                            targetId,
-                            targetType,
-                            cloneMessagePayload(msgData.message),
-                            shouldPreShow(),
-                        )
                         uiStore.popBoxList.shift()
+                        prepareForwardPayload(msgData.message)
+                            .then(payload => sendMsgRaw(targetId, targetType, payload, shouldPreShow()))
+                            .catch(reportForwardError)
                     },
                 },
             ],
