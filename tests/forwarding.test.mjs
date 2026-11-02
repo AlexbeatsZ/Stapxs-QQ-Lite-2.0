@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { loadForwardingRuntime, loadForwardingConnector, flushForwarding, message } from './helpers/forwarding-runtime.mjs'
 import { prepareForwardMessage, snapshotForwardMessages } from '../src/renderer/src/function/utils/forwardMessage.ts'
+import { resolveForwardImages } from '../src/renderer/src/function/utils/forwardImage.ts'
 import { reconcileSentMessage } from '../src/renderer/src/function/utils/sentMessage.ts'
 import { getOneBotResponseError } from '../src/renderer/src/function/utils/fileTransferUtil.ts'
 
@@ -26,7 +27,7 @@ async function setup(extra = {}) {
         findSessionContact: () => undefined, uuid: () => `uuid-${++uuid}`,
         BotMsgType: { Array: 1 }, sendStatEvent: () => {},
         Connector: { send: (...args) => calls.push(args) },
-        getOneBotResponseError, prepareForwardMessage, snapshotForwardMessages, reconcileSentMessage,
+        getOneBotResponseError, prepareForwardMessage, snapshotForwardMessages, reconcileSentMessage, resolveForwardImages,
         PopInfo: class { add(...args) { errors.push(args) } }, PopType: { ERR: 'error', INFO: 'info' },
         logger: { error: (...args) => errors.push(args) },
         popInfo: { add: (...args) => errors.push(args) }, app: { config: { globalProperties: { $t: text => text } } },
@@ -240,6 +241,8 @@ test('individual forwarding stops after rejection and reports partial completion
     t.runtime.multipleSelectList.value = ['1', '2', '3']
     t.api.forwardMsg({ user_id: 40 })
     const task = t.ui.popBoxList[0].button[1].fun()
+    // Pictures are resolved before the first send starts.
+    await flushForwarding()
     replies.shift().resolve({ status: 'ok', data: { message_id: 101 } })
     await flushForwarding()
     replies.shift().resolve({ status: 'failed', retcode: 100, wording: 'image rejected' })
@@ -297,4 +300,43 @@ test('Lagrange individual sends wait through the existing private action', async
     assert.equal(response.data.message_id, 101)
     assert.equal(sends[0][0], 'send_private_msg')
     assert.equal(sends[0][1].user_id, '40')
+})
+
+test('a self-sent picture with only a cache name is forwarded through its get_image URL', async () => {
+    const url = 'https://multimedia.nt.qq.com.cn/download?appid=1407&fileid=abc&rkey=k'
+    const lookups = [], sends = []
+    const t = await setup({ Connector: {
+        send: (...args) => sends.push(args),
+        callRawApi: async (...args) => {
+            lookups.push(args)
+            return { status: 'ok', retcode: 0, data: { file: url, url } }
+        },
+    } })
+    t.runtime.selectedForwardAction.value = 'single-message'
+    t.runtime.selectedMsg.value = message(5, '', {
+        message: [{ type: 'image', file: 'aef01498d1d788cd55cf456d8db932bc.png', url: '', summary: '[图片]' }],
+    })
+    t.api.forwardMsg({ group_id: 30 })
+    await t.ui.popBoxList[0].button[1].fun()
+    await flushForwarding()
+    assert.deepEqual(lookups.map(args => [args[0], args[1].file]), [['get_image', 'aef01498d1d788cd55cf456d8db932bc.png']])
+    assert.equal(sends.length, 1)
+    assert.equal(sends[0][1].group_id, '30')
+    assert.equal(sends[0][1].message[0].data.file, url)
+    assert.equal(t.errors.length, 0)
+})
+
+test('a picture the backend cannot resolve is reported instead of sent', async () => {
+    const sends = []
+    const t = await setup({ Connector: {
+        send: (...args) => sends.push(args),
+        callRawApi: async () => ({ status: 'failed', retcode: 100, message: 'image not found in cache' }),
+    } })
+    t.runtime.selectedForwardAction.value = 'single-message'
+    t.runtime.selectedMsg.value = message(5, '', { message: [{ type: 'image', file: 'gone.png', url: '' }] })
+    t.api.forwardMsg({ group_id: 30 })
+    await t.ui.popBoxList[0].button[1].fun()
+    await flushForwarding()
+    assert.equal(sends.length, 0)
+    assert.match(t.errors[0][1], /转发失败：Image source unavailable: gone\.png/)
 })

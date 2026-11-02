@@ -31,7 +31,7 @@ function callbackSource(name) {
 
 export async function loadForwardingRuntime(runtime) {
     const chatFile = 'src/renderer/src/pages/Chat.vue'
-    const names = ['cloneMessagePayload', 'forwardMsg']
+    const names = ['cloneMessagePayload', 'prepareForwardPayload', 'reportForwardError', 'forwardMsg']
     const code = `export default runtime => {
         let qed_try_times = 0
         ${Object.keys(runtime).map(name => `const ${name} = runtime.${name}`).join('\n')}
