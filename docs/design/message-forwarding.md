@@ -30,8 +30,20 @@ Received image `url` is not an outgoing parameter. Copy a transferable URL into
 `file` when the received file is a cache name. Retain explicit HTTP, file URI,
 absolute path and `base64://` sources, convert image data URLs to `base64://`, and
 preserve flash types. Do not rasterize remote images, which also preserves GIFs.
-A cache name without a URL remains available for adapters supporting cached files.
-A browser-only blob without a transferable source fails before batch sending.
+A cache name without a loadable URL or file source is resolved through OneBot
+`get_image` before encoding. Use its loadable `url`, then its local `file` path;
+a failed lookup or response without either source stops forwarding with an error.
+This includes SnowLuma self-sent image echoes with `<md5>.png` and an empty URL.
+Resolve images in copied payloads, including nested merged-forward node content,
+so the original timeline is unchanged. Images that already have a loadable source
+do not require another request.
+
+Single, individual, merged forwarding and "+1" share this asynchronous
+preparation. Individual forwarding resolves every selected image before sending
+the first message, then retains the existing ordered, acknowledged sends and
+partial-progress errors. Capture the destination before resolving images so an
+intervening chat switch cannot redirect the send. A browser-only blob without a
+transferable source fails before batch sending.
 
 The encoder copies segments before removing `type` and remapping `_type`; encoding
 cannot mutate the timeline or snapshot.
