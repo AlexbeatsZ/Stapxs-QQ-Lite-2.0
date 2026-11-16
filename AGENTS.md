@@ -5,13 +5,18 @@ Keep current state and cross-device project history in the user's fork.
 
 # Current State
 
-- Canonical repository is `AlexbeatsZ/Stapxs-QQ-Lite-2.0`. The current repair
-  branch is `codex/fix-web-download-metadata`, based on production source
-  `1ee5318` and its documentation closure `c3ac6b3`.
-- On 2026-11-15 the ROG service is still
-  `stapxs-qq-lite:forward-image-20261102-1ee5318`, container `stapxs-qq`,
-  port `8081 -> 8080`, `unless-stopped`, healthy, relay enabled. Its bundle is
-  `main-DClej_Zn.js`. The candidate build is `main-D0WOQYqt.js`.
+- Canonical repository is `AlexbeatsZ/Stapxs-QQ-Lite-2.0`. `main` integrates
+  repair code `25bacc8` from `codex/fix-web-download-metadata`, based on prior
+  production `1ee5318` and its documentation closure `c3ac6b3`.
+- On 2026-11-15 the ROG service runs
+  `stapxs-qq-lite:download-filename-20261115-25bacc8`, container `stapxs-qq`,
+  port `8081 -> 8080`, `unless-stopped`, healthy with zero restarts and relay
+  enabled. Its bundle is `main-D0WOQYqt.js`. The stopped rollback is
+  `stapxs-qq-rollback-20261115-download` with prior `forward-image` image.
+- Fork prerelease `selfuse-2026.11.15-download-filename` contains the Web ZIP
+  for code `25bacc8`. Server-local and Mac-to-Tailscale page, exact bundle,
+  PWA resources and relay checks pass, including 8 scenarios executed against
+  the actual deployed minified filename helper.
 - Current source includes server-perspective WebSocket relay, session/history
   and quoted-original fixes, ordered forwarding, file transfer/drop, login
   icon cleanup, SnowLuma device avatars, QZone background and cached-image
@@ -32,9 +37,6 @@ Keep current state and cross-device project history in the user's fork.
 
 # Active Work
 
-- Publish and deploy the download filename repair, then record the final
-  revision/image/bundle here. Keep the previous healthy image available while
-  replacing the service.
 - Browser control bridge timed out twice. The new page's actual click-to-disk
   acceptance and real native platform downloads remain unverified. The original
   QQ URL later returned 403 during broader character-set header checks.
