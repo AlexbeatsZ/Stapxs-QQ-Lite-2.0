@@ -29,19 +29,20 @@ export function isActiveTransferStatus(status: string): boolean {
  * 为浏览器托管的跨域下载补全文件名。
  * 跨域链接上的 download 属性会被浏览器忽略，文件名只能来自服务端；
  * QQ 文件服务器（NapCat 返回的 ftn 链接）根据 fname 参数生成 Content-Disposition，
- * 该参数为空时浏览器只能用 URL 路径命名，导致文件名和扩展名丢失。
+ * 该参数也可能是后端缓存路径或 UUID，必须使用消息中的真实文件名。
  */
 export function withDownloadFileName(url: URL, name: string): URL {
     // 只处理 QQ 文件服务器，其他服务的 fname 可能另有含义或受签名保护
-    const isQQFileServer = url.hostname.endsWith('.ftn.qq.com') &&
+    const isQQFileServer = ['http:', 'https:'].includes(url.protocol) &&
+        url.hostname.endsWith('.ftn.qq.com') &&
         url.pathname.startsWith('/ftn_handler/')
-    if (!name || !isQQFileServer || url.searchParams.get('fname') !== '') return url
+    if (!name || !isQQFileServer) return url
     // QQ 文件服务器不会把 + 还原为空格，不能用 URLSearchParams 的表单编码
     const result = new URL(url.href)
-    result.search = url.search.replace(
-        /([?&])fname=(?=&|$)/,
-        (_, prefix: string) => `${prefix}fname=${encodeURIComponent(name)}`,
-    )
+    const parameters = url.search ? url.search.slice(1).split('&') : []
+    // 仅移除 fname（包括重复/编码的键），其余查询参数保留原始字节与顺序。
+    const otherParameters = parameters.filter(parameter => !new URLSearchParams(parameter).has('fname'))
+    result.search = [...otherParameters, `fname=${encodeURIComponent(name)}`].join('&')
     return result
 }
 

@@ -45,16 +45,33 @@ OneBot-specific upload extensions.
   timeouts. Delegated tasks cannot provide reliable in-app progress.
 - Browsers ignore the `download` attribute on cross-origin links, so a
   delegated download is named by the server. NapCat returns QQ `ftn_handler`
-  URLs with an empty `fname=`; the client fills it with the file name so the QQ
-  server sends `Content-Disposition` with that name. Only
+  URLs with an empty `fname=`. SnowLuma can instead return a nonempty `fname`
+  containing `/UUID`, which QQ also uses as the download name. The client uses
+  the original chat/group-file name for every QQ download, replacing existing
+  `fname` values and adding it when missing, so the QQ server sends
+  `Content-Disposition` with that name. Only
   `*.ftn.qq.com/ftn_handler/` URLs are rewritten: other endpoints may give
   `fname` its own meaning or sign it. Encode the name with `encodeURIComponent`:
   the QQ server keeps `+` literally, so `URLSearchParams` form encoding turns
-  spaces into `+` in the saved name. Replace only the `fname` segment: re-serializing the
+  spaces into `+` in the saved name. Replace only the `fname` parameters: re-serializing the
   whole query with `URLSearchParams` would also rewrite other parameters
-  (`%20` becomes `+`). A literal `+` in a name must be sent as `%2B`. The same
+  (`%20` becomes `+`). Remove all duplicate and percent-encoded `fname` keys
+  before appending one canonical value, keeping other raw parameters in order.
+  A literal `+` in a name must be sent as `%2B`. The same
   `+` ambiguity previously broke saved access tokens at login (PR #380). Without it the browser
   names the file after the URL path and the extension is lost.
+- Chat, private and group-file download callbacks capture the original name in
+  the request echo. `startFileDownload` decodes it and `FileManager` forwards it
+  unchanged to the shared download function. Browser and Capacitor handoffs
+  share QQ URL naming; same-origin/blob and native backends keep their existing
+  explicit filename paths. Never derive the download name from the file ID or
+  from an adapter's temporary/cache path.
+- `yarn check` includes `test:file-transfer`. Its regressions cover missing,
+  empty, placeholder, stale, duplicate and encoded `fname` parameters, original
+  Unicode/space/plus/percent/special-character names, raw signed-query
+  preservation, and production entry functions through browser handoff and
+  native command dispatch. Native platform and actual browser disk writes
+  require separate acceptance.
 - Same-origin Web downloads retain in-app progress, have no fixed timeout, and
   surface Promise rejection instead of leaving a task permanently active.
 

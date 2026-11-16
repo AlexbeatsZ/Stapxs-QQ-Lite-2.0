@@ -11,7 +11,7 @@
     "capacitor:copy:before": "capacitor-sync-version",
     "typecheck": "vue-tsc --noEmit -p tsconfig.web.json",
     "test:relay": "node --test server/websocket-relay/index.test.mjs",
-    "check": "yarn lint && yarn typecheck && yarn test:session-switch && yarn test:quoted-message && yarn test:empty-history && yarn test:forwarding",
+    "check": "yarn lint && yarn typecheck && yarn test:session-switch && yarn test:quoted-message && yarn test:empty-history && yarn test:forwarding && yarn test:file-transfer",
     "test:forwarding": "node --experimental-strip-types --test tests/forwarding.test.mjs tests/forward-image.test.mjs",
     "test:empty-history": "node --experimental-strip-types --test tests/empty-history.test.mjs",
     "test:session-switch": "node --experimental-strip-types --test tests/history-request.test.mjs tests/history-loading.test.mjs",

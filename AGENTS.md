@@ -1,95 +1,106 @@
 # Goal
 
-Maintain this OneBot QQ client. Current work prevents password-manager icons
-from remaining after the OneBot login form is removed.
+Maintain the self-use OneBot QQ web client and its ROG Docker deployment.
+Keep current state and cross-device project history in the user's fork.
 
 # Current State
 
-- Baseline: `99be7d8` on `main`; GitHub remote is the user's
-  `AlexbeatsZ/Stapxs-QQ-Lite-2.0` fork.
-- Vue/TypeScript frontend; Yarn 4.12.0 is bundled in `.yarn/releases`.
-- Individual forwarding now captures source bodies, normalizes images and waits
-  for checked responses in chronological order. Sent callbacks match IDs/UUIDs;
-  live self events preserve unrelated history.
-- Same-second messages without a sequence retain insertion/backend order.
-- Login form teardown hides individual inputs before removing the subtree, so
-  KeePassXC-Browser can clean up its external icons while keeping autofill enabled.
+- Canonical repository is `AlexbeatsZ/Stapxs-QQ-Lite-2.0`. The current repair
+  branch is `codex/fix-web-download-metadata`, based on production source
+  `1ee5318` and its documentation closure `c3ac6b3`.
+- On 2026-11-15 the ROG service is still
+  `stapxs-qq-lite:forward-image-20261102-1ee5318`, container `stapxs-qq`,
+  port `8081 -> 8080`, `unless-stopped`, healthy, relay enabled. Its bundle is
+  `main-DClej_Zn.js`. The candidate build is `main-D0WOQYqt.js`.
+- Current source includes server-perspective WebSocket relay, session/history
+  and quoted-original fixes, ordered forwarding, file transfer/drop, login
+  icon cleanup, SnowLuma device avatars, QZone background and cached-image
+  forwarding via `get_image`.
+- Download recurrence is reproduced from Chrome's real download record.
+  `fname=/UUID` bypassed the old empty-only guard. The repair replaces or adds
+  QQ `fname` using the original message filename, collapses duplicate/encoded
+  keys and preserves unrelated raw query parameters. `yarn check` now includes
+  file-transfer regressions.
+- 2026-11-15 validation passed lint/types, 138 core/file-transfer tests,
+  5 relay tests and the modern-target Web build. A real QQ Range response
+  changed from UUID/no extension to the original Chinese `.pptx` name and MIME.
+- Historical logs from Mac, ROG, OMEN and five OMEN worktrees are merged into
+  `docs/log/2026-09.md`, `2026-10.md`, `2026-11.md` and tracked in this fork.
+- GitHub on 2026-11-15 shows PRs #403/#404/#405/#409/#410/#412/#414/#415/#416/
+  #417/#424/#425 merged. Image clipboard PR #420 remains open at `65bec78`.
+  Historical log entries retain their original dated acceptance boundaries.
 
 # Active Work
 
-- 2026-10-17: Web/Docker delegated (cross-origin) downloads lost file names:
-  browsers ignore `download` on cross-origin links and NapCat returns QQ
-  `ftn_handler` URLs with an empty `fname=`. The client fills `fname` only on
-  `*.ftn.qq.com/ftn_handler/` URLs, percent-encoded with `encodeURIComponent`
-  (`URLSearchParams` turned spaces into `+`). ROG `stapxs-qq` runs
-  `stapxs-qq-lite:download-filename-20261017-b6a0634` (overlay of
-  `keepass-login-20261015-970017b`, modules and relay meta retained, health
-  `relayEnabled: true`); stopped `stapxs-qq-prev` kept for rollback.
-  Verified in the user's Chrome with a real click: `被偷走的黎明_deepseek_1017 (1).html`
-  saved with the exact name. Upstream PR
-  [#414](https://github.com/Stapxs/Stapxs-QQ-Lite-2.0/pull/414) against `dev`
-  (`codex/fix-web-download-filename`, source files only; upstream `dev` has no
-  docs/tests for this module). Sourcery's QQ-only finding was addressed; the
-  re-review and SonarCloud passed.
-- Upstream PR [#412](https://github.com/Stapxs/Stapxs-QQ-Lite-2.0/pull/412)
-  is open against `dev`: `3a96f5f` on `codex/fix-keepass-login-icons`, containing
-  only the App.vue compatibility hook. Upstream check and `build --target esnext`
-  passed; default build also fails on the unmodified upstream base because of
-  its existing top-level-await/build-target mismatch.
-- PR #412 AI review checked on 2026-10-15: Sourcery completed with no change
-  suggestions or inline comments; SonarCloud quality gate passed with zero new
-  issues/security hotspots. Copilot did not review because the requesting
-  account had reached its quota. PR remains open for maintainer review.
-- 2026-10-15: KeePassXC 1.10.4.1 DOM reproduction confirmed two orphaned icons
-  with the original teardown. The input-style hook cleared one/two-field forms
-  on navigation and app unmount, including returning to the login form.
-- ROG `stapxs-qq` now runs `stapxs-qq-lite:keepass-login-20261015-970017b`
-  at `8081:8080`, retaining the relay, runtime environment and deployed modules.
-  Candidate and production relay health checks passed. The project check
-  (lint/typecheck and 102 existing tests) and production build passed. On
-  2026-10-15 the user confirmed successful real-browser acceptance of the login
-  icon disappearance fix.
-- Completed: forwarding/delivery fixes, 18 forwarding runtime regressions,
-  lint/typecheck, session/quote/recalled-history checks, 7 file-transfer regressions
-  and production build (2026-10-08).
-- Acceptance boundary: Chrome tab automation timed out; native window control was
-  disrupted by window changes and did not complete the forwarding workflow. No
-  real QQ delivery is claimed. A local fixture used only synthetic records and
-  was stopped and removed after the attempt.
+- Publish and deploy the download filename repair, then record the final
+  revision/image/bundle here. Keep the previous healthy image available while
+  replacing the service.
+- Browser control bridge timed out twice. The new page's actual click-to-disk
+  acceptance and real native platform downloads remain unverified. The original
+  QQ URL later returned 403 during broader character-set header checks.
+- Real QQ forwarding/recipient display, device notifications and native
+  clipboard acceptance retain their historical user-acceptance boundaries.
+
+# Workspace Locations
+
+- Mac canonical repair checkout is
+  `/Users/meta/Project/Workspaces/Stapxs-QQ-Lite-2.0`.
+- ROG production host is `meta@100.106.169.46`. Its original project checkout
+  `C:\Users\Meta\Project\Workspaces\Stapxs-QQ-Lite-2.0` remains on old
+  `pre-release@6fc8d250`, with unrelated pinyin/Dockerfile/modules changes.
+  Build production from verified integration source and the actual live image.
+- OMEN project checkout remains `codex/quoted-message-viewer@a696edc`; the root
+  `C:\Users\Meta\Stapxs-QQ-Lite-2.0` clone is `main@ff2d0f4`. Latest prior
+  self-use source lives in the `qq-device-presentation` managed worktree on
+  `codex/deploy-forward-image`. These checkouts are historical working copies.
+- Mac uses the Web build only. Local ignored `.env.yarn` sets
+  `ELECTRON_SKIP_BINARY_DOWNLOAD=1`; preserve shared Electron types used by
+  tsconfig. The incomplete Electron runtime/cache was removed on 2026-10-23.
 
 # Build / Run / Test
 
-- Install: `node .yarn/releases/yarn-4.12.0.cjs install --immutable`.
-- Initialize bundled assets: `git submodule update --init`.
-- Check: `node .yarn/releases/yarn-4.12.0.cjs check`.
-- File transfer: `node .yarn/releases/yarn-4.12.0.cjs test:file-transfer`.
-- Forwarding: `node .yarn/releases/yarn-4.12.0.cjs test:forwarding`.
-- Build: `node .yarn/releases/yarn-4.12.0.cjs build`.
-- Dev: `node .yarn/releases/yarn-4.12.0.cjs dev` (port 8080).
-- Design references to read before changing their modules:
-  [session history](docs/design/session-history.md),
-  [quoted messages](docs/design/quoted-messages.md),
-  [recalled history](docs/design/recalled-history.md),
-  [file transfer](docs/design/file-transfer.md),
-  [forwarding and delivery](docs/design/message-forwarding.md),
-  [login autofill](docs/design/login-autofill.md).
+- Yarn 4.12.0 is bundled. Use `node .yarn/releases/yarn-4.12.0.cjs` for commands.
+- Install dependencies with `install --immutable`; initialize pinned assets
+  with `git submodule update --init` when missing.
+- `check` runs lint/typecheck, session/quote/empty-history/forwarding and file
+  transfer/drop regressions. `test:relay` covers the optional relay.
+- Run `check` and `build --target esnext` sequentially. The upstream default
+  target can fail on existing top-level await. `dev` serves port 8080.
+- For deployment, overlay newly built Web assets onto the verified live relay
+  image, retain deployed modules and relay metadata, preserve all runtime
+  environment values and validate a candidate before switching port 8081.
+- Verify server-local and Tailscale page/bundle/PWA/health after replacement.
+  Release static Web ZIPs to this fork. Source-only upstream work keeps agent
+  entry/log files excluded from the upstream PR branch.
 
 # Durable Lessons
 
-- The web build is a PWA (`autoUpdate`, skipWaiting + clientsClaim). After a
-  deploy, the first reload still runs the old precached bundle; close the tabs
-  or unregister the Service Worker before judging a fix in the browser.
-- `+` in URLs has broken this app twice: saved access tokens at login
-  (`09099e6`, PR #380 in `connect.ts`) and QQ download names (2026-10-17).
-  Encode values with `encodeURIComponent`, never let `URLSearchParams`
-  form-encode or re-serialize a query a server decodes literally, and keep a
-  test with a literal `+` and a space for any new URL-building code.
-- For automated download acceptance, use a real pointer click. A script
-  `.click()` has no user activation, so the `target=_blank` delegated link is
-  silently popup-blocked and nothing downloads.
+- A nonempty QQ `fname` can contain a cache identifier. Trust the original
+  message/group-file name. Preserve raw unrelated query parameters and use
+  encodeURIComponent because QQ treats `+` literally.
+- PWA autoUpdate/skipWaiting/clientsClaim can leave an existing tab running an
+  old bundle. Verify the loaded bundle, and close/reopen old QQ tabs to activate
+  a new deployment before browser acceptance.
+- Delegated cross-origin downloads require real pointer activation during UI
+  acceptance; script-only clicks can be silently popup-blocked.
+- A controlled fixture or native command-dispatch test does not establish real
+  QQ delivery or native disk writes. Keep those acceptance results explicit.
+- Preserve async request generations across A -> B -> A navigation. Correlate
+  self-events/acknowledgements by exact opaque IDs/UUIDs and never replace
+  unrelated history. Same-second messages without seq preserve backend order.
+- ROG's old checkout does not represent current production. Inspect Docker and
+  source lineage before rebuilding. Use uploaded PowerShell scripts for Windows
+  remote operations; use Windows System32 tar for drive-letter archives.
+- A `$t` key with parameters must exist in `l10n/zh-CN.po`. Synthetic sends need
+  at least one history message to resolve default `msg_type`.
 
-- Controlled OneBot runtime regressions do not establish delivery through a
-  logged-in QQ backend. Report that acceptance separately.
-- Own-message events may precede acknowledgements, and body-fetch callbacks can
-  arrive out of order. Bind UUID to real ID and deduplicate that record rather
-  than guessing by the latest placeholder. OneBot message IDs are opaque.
+# Docs Index
+
+Read the matching design before changing its module.
+
+- `docs/design/file-transfer.md` covers uploads/downloads and file drop.
+- `docs/design/session-history.md` covers request ownership and paging.
+- `docs/design/quoted-messages.md` covers original retrieval and positioning.
+- `docs/design/recalled-history.md` covers empty/recalled pagination slots.
+- `docs/design/message-forwarding.md` covers ordered forwarding and images.
+- `docs/design/login-autofill.md` covers password-manager cleanup.
