@@ -6,8 +6,8 @@ Keep current state and cross-device project history in the user's fork.
 # Current State
 
 - Canonical repository is `AlexbeatsZ/Stapxs-QQ-Lite-2.0`. `main` integrates
-  repair code `25bacc8` from `codex/fix-web-download-metadata`, based on prior
-  production `1ee5318` and its documentation closure `c3ac6b3`.
+  the image clipboard repair from `500d121`/`65bec78` (upstream PR #420),
+  on top of download repair `25bacc8` and production integration `67a0a86`.
 - On 2026-11-15 the ROG service runs
   `stapxs-qq-lite:download-filename-20261115-25bacc8`, container `stapxs-qq`,
   port `8081 -> 8080`, `unless-stopped`, healthy with zero restarts and relay
@@ -37,6 +37,10 @@ Keep current state and cross-device project history in the user's fork.
 
 # Active Work
 
+- 2026-11-16 image clipboard integration passes lint/types, 157 default
+  regressions, 5 relay tests and Web build. Deployment and actual Chrome
+  clipboard acceptance are in progress. ROG and the user's loaded Chrome
+  tab still use the pre-integration bundle listed above.
 - Browser control bridge timed out twice. The new page's actual click-to-disk
   acceptance and real native platform downloads remain unverified. The original
   QQ URL later returned 403 during broader character-set header checks.
@@ -64,8 +68,9 @@ Keep current state and cross-device project history in the user's fork.
 - Yarn 4.12.0 is bundled. Use `node .yarn/releases/yarn-4.12.0.cjs` for commands.
 - Install dependencies with `install --immutable`; initialize pinned assets
   with `git submodule update --init` when missing.
-- `check` runs lint/typecheck, session/quote/empty-history/forwarding and file
-  transfer/drop regressions. `test:relay` covers the optional relay.
+- `check` runs lint/typecheck, session/quote/empty-history/forwarding, file
+  transfer/drop and image clipboard regressions. `test:relay` covers the
+  optional relay.
 - Run `check` and `build --target esnext` sequentially. The upstream default
   target can fail on existing top-level await. `dev` serves port 8080.
 - For deployment, overlay newly built Web assets onto the verified live relay
@@ -93,6 +98,9 @@ Keep current state and cross-device project history in the user's fork.
 - ROG's old checkout does not represent current production. Inspect Docker and
   source lineage before rebuilding. Use uploaded PowerShell scripts for Windows
   remote operations; use Windows System32 tar for drive-letter archives.
+- An open upstream PR can contain a completed fix absent from self-use main
+  and production. Check source ancestry and the browser's loaded bundle when
+  a previously repaired symptom recurs.
 - A `$t` key with parameters must exist in `l10n/zh-CN.po`. Synthetic sends need
   at least one history message to resolve default `msg_type`.
 
@@ -101,6 +109,7 @@ Keep current state and cross-device project history in the user's fork.
 Read the matching design before changing its module.
 
 - `docs/design/file-transfer.md` covers uploads/downloads and file drop.
+- `docs/design/image-clipboard.md` covers chat/viewer/edit image copying.
 - `docs/design/session-history.md` covers request ownership and paging.
 - `docs/design/quoted-messages.md` covers original retrieval and positioning.
 - `docs/design/recalled-history.md` covers empty/recalled pagination slots.
