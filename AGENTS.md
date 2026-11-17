@@ -3,20 +3,25 @@
 Maintain the self-use OneBot QQ web client and its ROG Docker deployment.
 Keep current state and cross-device project history in the user's fork.
 
+ROG must run the latest self-use integration from the user's fork, including
+the user's completed repair PRs while they remain unmerged upstream. Include
+these repairs in every deployment and verify the production bundle against
+that integration. This requirement was confirmed on 2026-11-16.
+
 # Current State
 
 - Canonical repository is `AlexbeatsZ/Stapxs-QQ-Lite-2.0`. `main` integrates
   the image clipboard repair from `500d121`/`65bec78` (upstream PR #420),
   on top of download repair `25bacc8` and production integration `67a0a86`.
-- On 2026-11-15 the ROG service runs
-  `stapxs-qq-lite:download-filename-20261115-25bacc8`, container `stapxs-qq`,
+- On 2026-11-16 the ROG service runs source `e4c75b9` in
+  `stapxs-qq-lite:image-clipboard-20261116-e4c75b9`, container `stapxs-qq`,
   port `8081 -> 8080`, `unless-stopped`, healthy with zero restarts and relay
-  enabled. Its bundle is `main-D0WOQYqt.js`. The stopped rollback is
-  `stapxs-qq-rollback-20261115-download` with prior `forward-image` image.
-- Fork prerelease `selfuse-2026.11.15-download-filename` contains the Web ZIP
-  for code `25bacc8`. Server-local and Mac-to-Tailscale page, exact bundle,
-  PWA resources and relay checks pass, including 8 scenarios executed against
-  the actual deployed minified filename helper.
+  enabled. Its bundle is `main-Cil-_tTM.js`. Server-local and Mac-to-Tailscale
+  page, exact bundle, PWA resources and relay checks pass. Existing modules
+  and all runtime environment values were preserved.
+- Latest published Web prerelease remains
+  `selfuse-2026.11.15-download-filename`. For the image clipboard follow-up,
+  the user requested deployment and service checks only.
 - Current source includes server-perspective WebSocket relay, session/history
   and quoted-original fixes, ordered forwarding, file transfer/drop, login
   icon cleanup, SnowLuma device avatars, QZone background and cached-image
@@ -26,21 +31,21 @@ Keep current state and cross-device project history in the user's fork.
   QQ `fname` using the original message filename, collapses duplicate/encoded
   keys and preserves unrelated raw query parameters. `yarn check` now includes
   file-transfer regressions.
-- 2026-11-15 validation passed lint/types, 138 core/file-transfer tests,
+- 2026-11-16 validation passed lint/types, 157 core/file-transfer/clipboard tests,
   5 relay tests and the modern-target Web build. A real QQ Range response
   changed from UUID/no extension to the original Chinese `.pptx` name and MIME.
 - Historical logs from Mac, ROG, OMEN and five OMEN worktrees are merged into
   `docs/log/2026-09.md`, `2026-10.md`, `2026-11.md` and tracked in this fork.
 - GitHub on 2026-11-15 shows PRs #403/#404/#405/#409/#410/#412/#414/#415/#416/
-  #417/#424/#425 merged. Image clipboard PR #420 remains open at `65bec78`.
+  #417/#424/#425 merged. On 2026-11-16 the user's only open upstream PR is
+  image clipboard #420 at `65bec78`, now integrated into self-use production.
   Historical log entries retain their original dated acceptance boundaries.
 
 # Active Work
 
-- 2026-11-16 image clipboard integration passes lint/types, 157 default
-  regressions, 5 relay tests and Web build. Deployment and actual Chrome
-  clipboard acceptance are in progress. ROG and the user's loaded Chrome
-  tab still use the pre-integration bundle listed above.
+- Image clipboard integration is deployed. Actual cross-application paste
+  acceptance remains pending. Close and reopen existing QQ tabs to activate
+  the new PWA bundle. The user narrowed this follow-up to deployment.
 - Browser control bridge timed out twice. The new page's actual click-to-disk
   acceptance and real native platform downloads remain unverified. The original
   QQ URL later returned 403 during broader character-set header checks.
