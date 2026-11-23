@@ -55,7 +55,7 @@ that integration. This requirement was confirmed on 2026-11-16.
 # Workspace Locations
 
 - Mac canonical repair checkout is
-  `/Users/meta/Project/Workspaces/Stapxs-QQ-Lite-2.0`.
+  `/Users/meta/Developer/Stapxs-QQ-Lite-2.0`.
 - ROG production host is `meta@100.106.169.46`. Its original project checkout
   `C:\Users\Meta\Project\Workspaces\Stapxs-QQ-Lite-2.0` remains on old
   `pre-release@6fc8d250`, with unrelated pinyin/Dockerfile/modules changes.
